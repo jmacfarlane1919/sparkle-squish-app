@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LABEL_SIZES } from "@/lib/labels/sizes";
+import { NiimbotPrint } from "@/components/niimbot-print";
 import { printLabels } from "@/server/actions/labels";
 
 export type QueueRow = {
@@ -18,13 +19,22 @@ export type QueueRow = {
   barcode: string;
 };
 
-export function LabelQueue({ groups }: { groups: { date: string; label: string; items: QueueRow[] }[] }) {
+export function LabelQueue({
+  groups,
+  bluetoothEnabled = false,
+}: {
+  groups: { date: string; label: string; items: QueueRow[] }[];
+  bluetoothEnabled?: boolean;
+}) {
   const all = useMemo(() => groups.flatMap((group) => group.items), [groups]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [qty, setQty] = useState<Record<string, number>>(() => Object.fromEntries(all.map((item) => [item.id, item.printQty])));
   const [size, setSize] = useState("niimbot-40x20");
   const selectedIds = all.filter((item) => selected[item.id]).map((item) => item.id);
   const stickerCount = selectedIds.reduce((sum, id) => sum + (qty[id] || 0), 0);
+  const bluetoothItems = all
+    .filter((item) => selected[item.id] && (qty[item.id] || 0) > 0)
+    .map((item) => ({ name: item.name, price: item.price, sku: item.sku, barcode: item.barcode, qty: qty[item.id] || 0 }));
 
   function setDate(date: string, on: boolean) {
     setSelected((current) => {
@@ -110,6 +120,7 @@ export function LabelQueue({ groups }: { groups: { date: string; label: string; 
         <button formAction="/api/labels/report?format=pdf" formMethod="post" className="h-11 rounded-2xl border border-[#e4dced] bg-white px-4 text-sm font-extrabold">
           PDF list
         </button>
+        {bluetoothEnabled ? <NiimbotPrint items={bluetoothItems} /> : null}
       </div>
     </form>
   );

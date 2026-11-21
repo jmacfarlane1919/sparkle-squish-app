@@ -7,19 +7,20 @@ import { SHOP, getAppUrl, isDemoMode, shopifyConfigured, shopifyDomain } from "@
 import { FEATURES } from "@/lib/features";
 import { NEXT_FREE_BARCODE, allocateBarcode } from "@/lib/identifiers";
 import { DEFAULT_LABELS_PRINTED_THROUGH } from "@/lib/labels/queue";
-import { previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature } from "@/server/actions/settings";
+import { previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature, toggleNiimbotBluetooth } from "@/server/actions/settings";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const params = await searchParams;
-  const [flags, categories, counter, barcodes, lastBackup, labelCutoff, runs] = await Promise.all([
+  const [flags, categories, counter, barcodes, lastBackup, labelCutoff, bluetooth, runs] = await Promise.all([
     prisma.featureFlag.findMany(),
     prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.barcodeCounter.findUnique({ where: { id: "series" } }),
     prisma.variant.findMany({ select: { ssBarcode: true } }),
     prisma.appSetting.findUnique({ where: { key: "last_backup" } }),
     prisma.appSetting.findUnique({ where: { key: "labels_printed_through" } }),
+    prisma.appSetting.findUnique({ where: { key: "niimbot_bluetooth" } }),
     prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 5 }),
   ]);
   const nextBarcode = counter ? allocateBarcode(counter.lastIssued, barcodes.map((row) => row.ssBarcode).filter(Boolean)) : NEXT_FREE_BARCODE;
@@ -55,6 +56,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Input name="cutoff" type="date" defaultValue={labelCutoff?.value || DEFAULT_LABELS_PRINTED_THROUGH} required />
           </Field>
           <Button type="submit" variant="secondary">Save</Button>
+        </form>
+      </section>
+      <section className="rounded-[22px] bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-extrabold text-[#2f6fe0]">Print to NIIMBOT</h2>
+            <p className="mt-1 text-sm text-[#8a8496]">Experimental. Chrome on a computer or Android can send the 40 × 20 mm label over Bluetooth. iPhone Safari cannot. Sending does not mark labels printed.</p>
+          </div>
+          <span className={`rounded-full px-2 py-1 text-[11px] font-extrabold ${bluetooth?.value === "on" ? "bg-[#d4f1ea] text-[#14685a]" : "bg-[#f3eef6] text-[#8a8496]"}`}>
+            {bluetooth?.value === "on" ? "On" : "Off"}
+          </span>
+        </div>
+        <form action={toggleNiimbotBluetooth} className="mt-3">
+          <Button type="submit" variant="outline">{bluetooth?.value === "on" ? "Turn off" : "Turn on"}</Button>
         </form>
       </section>
       <section className="rounded-[22px] bg-white p-4">

@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { drawProductLabel, type LabelContent } from "@/lib/labels/template";
 import { labelSize } from "@/lib/labels/sizes";
+
+/** Itim, bundled so the PDF, the bitmap, and a Rollo print use the same logo. */
+export const BRAND_FONT_FILE = path.join(process.cwd(), "src/lib/labels/fonts/Itim-Regular.ttf");
 
 export type PrintableLabel = LabelContent & { qty?: number };
 
@@ -20,9 +26,14 @@ export async function renderLabels(items: PrintableLabel[], sizeId = "niimbot-40
   const size = labelSize(sizeId);
   const copies = expandLabels(items);
   const pdf = await PDFDocument.create();
+  pdf.registerFontkit(fontkit);
   const fonts = {
     regular: await pdf.embedFont(StandardFonts.Helvetica),
     bold: await pdf.embedFont(StandardFonts.HelveticaBold),
+    // calt/liga swap in glyphs pdf-lib never gives a width, so the brand stretches and clips.
+    brand: await pdf.embedFont(readFileSync(BRAND_FONT_FILE), {
+      features: { liga: false, calt: false, dlig: false },
+    }),
   };
 
   if (!copies.length) {

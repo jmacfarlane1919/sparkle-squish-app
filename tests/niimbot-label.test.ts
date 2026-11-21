@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import ExcelJS from "exceljs";
 import { PDFDocument } from "pdf-lib";
 import { NIIMBOT_COLUMNS, buildNiimbotWorkbook } from "@/lib/labels/niimbot";
-import { plainPrice } from "@/lib/labels/template";
+import { niimbotBitmapSize } from "@/lib/labels/niimbot-bitmap";
+import { LEFT_SAFE_MARGIN_MM, brandBaselineX, plainPrice } from "@/lib/labels/template";
 import { renderLabels } from "@/lib/labels/render";
 import { labelSize } from "@/lib/labels/sizes";
 
@@ -51,16 +52,42 @@ describe("40x20 mm label", () => {
     expect(page.getWidth()).toBeCloseTo(size.width, 2);
     expect(page.getHeight()).toBeCloseTo(size.height, 2);
     const raw = pdfText(pdf);
-    const text = [...raw.matchAll(/<([0-9A-Fa-f]+)>/g)].map((match) => Buffer.from(match[1], "hex").toString("latin1")).join("");
-    expect(text).toContain("Sparkle & Squish");
+    const readable = [...raw.matchAll(/<([0-9A-Fa-f]+)>/g)]
+      .map((match) => Buffer.from(match[1], "hex").toString("latin1"))
+      .filter((value) => /^[\x20-\x7e]+$/.test(value));
+    const text = readable.join("");
     expect(text).toContain("Peach Mochi Bear");
     expect(text).toContain("14.00");
     expect(text).not.toContain("$");
     expect(text).toContain("2000000003450");
     expect(text).toContain("SS-SQ-043-STD");
     expect(raw).toMatch(/ 1 -1 /);
+    expect(raw).toContain("Itim");
     expect(plainPrice("$12.00")).toBe("12.00");
     expect(plainPrice("08.50")).toBe("08.50");
+  });
+
+  it("keeps the rotated brand at least 2.5 mm inside the left edge", async () => {
+    expect(LEFT_SAFE_MARGIN_MM).toBeGreaterThanOrEqual(2.5);
+    expect(brandBaselineX(0, 5)).toBeGreaterThanOrEqual((2.5 / 25.4) * 72 + 5);
+    const pdf = await renderLabels(
+      [{ name: "Peach Mochi Bear", price: "$14.00", sku: "SS-SQ-043-STD", barcode: "2000000003450" }],
+      "niimbot-40x20",
+    );
+    const raw = pdfText(pdf);
+    const matrix = raw.match(/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) Tm/);
+    expect(matrix).toBeTruthy();
+    expect(Number(matrix?.[2])).toBeCloseTo(1, 1);
+    expect(Number(matrix?.[3])).toBeCloseTo(-1, 1);
+    const baseline = Number(matrix?.[5]);
+    const head = raw.slice(0, raw.indexOf(" Tm"));
+    const fontSize = Number(head.match(/([\d.]+) Tf/)?.[1]);
+    expect(fontSize).toBeGreaterThan(0);
+    expect(baseline - fontSize).toBeGreaterThanOrEqual((LEFT_SAFE_MARGIN_MM / 25.4) * 72 - 0.05);
+  });
+
+  it("bitmaps a 40 by 20 mm label at 203 dpi", () => {
+    expect(niimbotBitmapSize()).toEqual({ dpi: 203, width: 320, height: 160 });
   });
 });
 

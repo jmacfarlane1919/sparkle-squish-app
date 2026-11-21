@@ -115,6 +115,22 @@ export async function toggleFeature(formData: FormData) {
   });
 }
 
+export async function toggleNiimbotBluetooth() {
+  const current = await prisma.appSetting.findUnique({ where: { key: "niimbot_bluetooth" } });
+  const enabled = current?.value !== "on";
+  await prisma.appSetting.upsert({
+    where: { key: "niimbot_bluetooth" },
+    update: { value: enabled ? "on" : "off" },
+    create: { key: "niimbot_bluetooth", value: enabled ? "on" : "off" },
+  });
+  revalidatePath("/labels");
+  go("/settings", {
+    notice: enabled
+      ? "Bluetooth printing is on. It shows on Needs labels and does not mark anything printed."
+      : "Bluetooth printing is off.",
+  });
+}
+
 export async function saveLabelCutoff(formData: FormData) {
   const cutoff = dateOnly(text(formData, "cutoff"));
   if (!cutoff) go("/settings", { error: "Use a date like 2026-11-06." });

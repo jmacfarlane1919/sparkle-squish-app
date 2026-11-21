@@ -38,7 +38,7 @@ export async function saveQueueQuantities(qtys: { id: string; qty: number }[]) {
   }
 }
 
-export async function printLabels(formData: FormData) {
+async function recordPrinted(formData: FormData) {
   const { qtys, selected, size } = readQueueForm(formData);
   if (!selected.length) go("/labels", { error: "Select at least one product." });
   await saveQueueQuantities(qtys);
@@ -67,7 +67,18 @@ export async function printLabels(formData: FormData) {
   revalidatePath("/labels");
   revalidatePath("/");
   revalidatePath("/inventory");
+  return job;
+}
+
+export async function printLabels(formData: FormData) {
+  const job = await recordPrinted(formData);
   redirect(`/api/labels/job/${job.id}`);
+}
+
+/** Marks the selected rows printed without sending them to a printer. */
+export async function markLabelsPrinted(formData: FormData) {
+  await recordPrinted(formData);
+  go("/labels", { notice: "Marked as printed. Reprint any time from Printed." });
 }
 
 export async function undoPrintJob(formData: FormData) {

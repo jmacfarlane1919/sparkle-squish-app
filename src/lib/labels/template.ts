@@ -15,6 +15,14 @@ export const LABEL_TEMPLATE_ID = "ss-niimbot-40x20";
 export const NIIMBOT_WIDTH_MM = 40;
 export const NIIMBOT_HEIGHT_MM = 20;
 
+/**
+ * NIIMBOT leaves the left edge unprintable. The brand ink, not the baseline,
+ * stays at least this far inside the page.
+ */
+export const LEFT_SAFE_MARGIN_MM = 2.5;
+
+const PT_PER_MM = 72 / 25.4;
+
 export type LabelContent = {
   name: string;
   price: string;
@@ -25,7 +33,16 @@ export type LabelContent = {
 export type LabelFonts = {
   regular: PDFFont;
   bold: PDFFont;
+  brand: PDFFont;
 };
+
+/**
+ * A 90° counterclockwise draw sits the glyphs to the left of the baseline.
+ * The baseline therefore starts one font size past the safe margin.
+ */
+export function brandBaselineX(boxX: number, fontSize: number) {
+  return boxX + LEFT_SAFE_MARGIN_MM * PT_PER_MM + fontSize;
+}
 
 export type LabelBox = {
   x: number;
@@ -71,29 +88,36 @@ function drawBarcode(page: PDFPage, bits: string, x: number, y: number, width: n
 
 export function drawProductLabel(page: PDFPage, fonts: LabelFonts, box: LabelBox, item: LabelContent) {
   const brand = "Sparkle & Squish";
-  let brandSize = Math.min(5.4, box.height * 0.095);
-  while (brandSize > 3 && fonts.bold.widthOfTextAtSize(brand, brandSize) > box.height - 4) brandSize -= 0.1;
-  const brandLength = fonts.bold.widthOfTextAtSize(brand, brandSize);
-  const brandX = box.x + brandSize * 0.82;
+  const rightPad = Math.max(1.5 * PT_PER_MM, box.width * 0.02);
+  let brandSize = Math.min(5.2, box.height * 0.09);
+  let brandLength = fonts.brand.widthOfTextAtSize(brand, brandSize);
+  let brandX = brandBaselineX(box.x, brandSize);
+  let ruleX = brandX + Math.max(brandSize * 0.45, 2);
+  let contentX = ruleX + Math.max(2, box.width * 0.018);
+  let contentWidth = box.x + box.width - rightPad - contentX;
+  while (brandSize > 2.6 && (brandLength > box.height - 3 || contentWidth < box.width * 0.55)) {
+    brandSize -= 0.1;
+    brandLength = fonts.brand.widthOfTextAtSize(brand, brandSize);
+    brandX = brandBaselineX(box.x, brandSize);
+    ruleX = brandX + Math.max(brandSize * 0.45, 2);
+    contentX = ruleX + Math.max(2, box.width * 0.018);
+    contentWidth = box.x + box.width - rightPad - contentX;
+  }
   page.drawText(brand, {
     x: brandX,
     y: box.y + (box.height - brandLength) / 2,
     size: brandSize,
-    font: fonts.bold,
+    font: fonts.brand,
     color: ink,
     rotate: degrees(90),
   });
 
-  const ruleX = brandX + Math.max(1.6, box.width * 0.012);
   page.drawLine({
     start: { x: ruleX, y: box.y + 1.5 },
     end: { x: ruleX, y: box.y + box.height - 1.5 },
     thickness: Math.max(0.35, box.width * 0.004),
     color: ink,
   });
-
-  const contentX = ruleX + Math.max(2, box.width * 0.02);
-  const contentWidth = box.x + box.width - contentX - Math.max(1.5, box.width * 0.02);
   const priceText = plainPrice(item.price);
   const nameFit = fitLine(item.name, fonts.bold, contentWidth, Math.min(6.2, box.height * 0.12), 3.2);
   const priceSize = Math.min(box.height * 0.24, 13);
@@ -135,7 +159,7 @@ export function drawProductLabel(page: PDFPage, fonts: LabelFonts, box: LabelBox
     });
   }
 
-  const digitY = box.y + 1;
+  const digitY = box.y + 0.9 * PT_PER_MM;
   const barcodeY = digitY + digitSize + 0.7;
   const barcodeTop = cursor - 1.1;
   const barcodeHeight = barcodeTop - barcodeY;

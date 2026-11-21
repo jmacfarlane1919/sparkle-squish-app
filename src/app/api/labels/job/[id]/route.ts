@@ -16,7 +16,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   return new Response(Buffer.from(pdf), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="ss-labels-${id.slice(-6)}.pdf"`,
+      "Content-Disposition": `inline; filename="ss-labels-${id.slice(-6)}.pdf"`,
     },
   });
 }

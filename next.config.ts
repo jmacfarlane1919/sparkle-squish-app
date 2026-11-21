@@ -6,7 +6,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "8mb",
     },
   },
-  transpilePackages: ["@zxing/browser", "@zxing/library"],
+  outputFileTracingIncludes: {
+    "/*": ["./src/lib/labels/fonts/**/*"],
+  },
+  transpilePackages: ["@zxing/browser", "@zxing/library", "@mmote/niimbluelib"],
 };
 
 export default nextConfig;

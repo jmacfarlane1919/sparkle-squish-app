@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LabelQueue } from "@/components/label-queue";
 import { Notice, PageIntro } from "@/components/bits";
+import { prisma } from "@/lib/db";
 import { formatDay } from "@/lib/format";
 import { labelsPrintedThrough, queueRows } from "@/server/label-queue";
 
@@ -8,7 +9,11 @@ export const metadata = { title: "Needs labels" };
 
 export default async function LabelsPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const params = await searchParams;
-  const [rows, cutoff] = await Promise.all([queueRows("needs_labels"), labelsPrintedThrough()]);
+  const [rows, cutoff, bluetooth] = await Promise.all([
+    queueRows("needs_labels"),
+    labelsPrintedThrough(),
+    prisma.appSetting.findUnique({ where: { key: "niimbot_bluetooth" } }),
+  ]);
   const groups = new Map<string, typeof rows>();
   for (const row of rows) {
     groups.set(row.receivedOn, [...(groups.get(row.receivedOn) || []), row]);
@@ -35,7 +40,7 @@ export default async function LabelsPage({ searchParams }: { searchParams: Promi
       {grouped.length === 0 ? (
         <p className="rounded-[22px] bg-white p-4 text-sm text-[#8a8496]">Nothing is waiting. A delivery, a new product, or an import received after {cutoff} shows up here.</p>
       ) : (
-        <LabelQueue groups={grouped} />
+        <LabelQueue groups={grouped} bluetoothEnabled={bluetooth?.value === "on"} />
       )}
     </div>
   );
