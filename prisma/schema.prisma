@@ -99,6 +99,7 @@ model Variant {
   countLines             InventoryCountLine[]
   saleLines              SaleLine[]
   refundLines            RefundLine[]
+  labelItems             LabelQueueItem[]
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
 
@@ -262,6 +263,35 @@ model RefundLine {
   qty           Int
   amountCents   Int
   unitCostCents Int?
+}
+
+model LabelPrintJob {
+  id         String           @id @default(cuid())
+  printedAt  DateTime         @default(now())
+  size       String
+  labelCount Int
+  undoneAt   DateTime?
+  snapshot   String           @default("[]")
+  items      LabelQueueItem[]
+}
+
+model LabelQueueItem {
+  id           String         @id @default(cuid())
+  variantId    String
+  variant      Variant        @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  source       String
+  sourceKey    String         @unique
+  receivedOn   String
+  suggestedQty Int
+  printQty     Int
+  status       String         @default("needs_labels")
+  printedAt    DateTime?
+  printedCount Int            @default(0)
+  printJobId   String?
+  printJob     LabelPrintJob? @relation(fields: [printJobId], references: [id])
+  createdAt    DateTime       @default(now())
+
+  @@index([status, receivedOn])
 }
 
 model AuditLog {

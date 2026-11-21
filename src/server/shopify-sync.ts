@@ -3,6 +3,7 @@ import { laterBarcode, parseSsSku } from "@/lib/identifiers";
 import { shopifyConfigured } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { shopifyGraphql } from "@/lib/shopify/client";
+import { enqueueImport } from "@/server/label-queue";
 import { LOCATIONS_QUERY, ORDERS_QUERY, PRODUCTS_QUERY } from "@/lib/shopify/queries";
 
 type MetafieldValue = { value?: string | null } | null;
@@ -206,7 +207,7 @@ async function upsertRemoteProduct(product: RemoteProduct) {
       },
     });
     for (const [index, variant] of product.variants.nodes.entries()) {
-      await createVariantFromRemote(created.id, variant, index);
+      await createVariantFromRemote(created.id, variant, index, meta(product.receivedAt));
     }
     return "created";
   }
@@ -215,7 +216,7 @@ async function upsertRemoteProduct(product: RemoteProduct) {
     const local = existing.variants.find((variant) => variant.shopifyVariantId === remote.id);
     const codes = vendorBarcodes(remote);
     if (!local) {
-      await createVariantFromRemote(existing.id, remote, index);
+      await createVariantFromRemote(existing.id, remote, index, meta(product.receivedAt));
       continue;
     }
     await prisma.variant.update({
@@ -236,7 +237,7 @@ async function upsertRemoteProduct(product: RemoteProduct) {
   return "updated";
 }
 
-async function createVariantFromRemote(productId: string, variant: RemoteVariant, position: number) {
+async function createVariantFromRemote(productId: string, variant: RemoteVariant, position: number, receivedOn: string) {
   const codes = vendorBarcodes(variant);
   const parsed = parseSsSku(meta(variant.ssSku));
   const created = await prisma.variant.create({
@@ -268,6 +269,9 @@ async function createVariantFromRemote(productId: string, variant: RemoteVariant
       create: { id: "series", lastIssued: next },
     });
   }
+  const levels = await prisma.stockLevel.findMany({ where: { variantId: created.id } });
+  const onHand = levels.reduce((sum, level) => sum + level.available, 0);
+  await enqueueImport(created.id, receivedOn, onHand);
 }
 
 async function rememberOrder(order: IncomingOrder) {

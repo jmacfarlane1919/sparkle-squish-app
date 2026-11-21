@@ -3,14 +3,16 @@ import { Card, PageIntro } from "@/components/bits";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/db";
 import { channelLabel, chicagoDateKey, formatDay, formatMoney, formatPercent, formatWhen, greeting } from "@/lib/format";
+import { needsLabelCount } from "@/server/label-queue";
 
 export default async function HomePage() {
   const today = chicagoDateKey(new Date());
-  const [orders, refunds, variants, openOrders] = await Promise.all([
+  const [orders, refunds, variants, openOrders, labelCount] = await Promise.all([
     prisma.saleOrder.findMany({ include: { lines: true }, orderBy: { processedAt: "desc" }, take: 300 }),
     prisma.refund.findMany({ include: { lines: true, order: true }, orderBy: { processedAt: "desc" }, take: 100 }),
     prisma.variant.findMany({ select: { ssSku: true, ssBarcode: true, costCents: true } }),
     prisma.purchaseOrder.count({ where: { status: { in: ["ordered", "partial"] } } }),
+    needsLabelCount(),
   ]);
   const dayOrders = orders.filter((order) => !order.cancelled && chicagoDateKey(order.processedAt) === today);
   const dayRefunds = refunds.filter((refund) => chicagoDateKey(refund.processedAt) === today);
@@ -39,6 +41,10 @@ export default async function HomePage() {
         <Link href="/inventory" className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
           <p className="text-lg font-extrabold text-[#2f6fe0]">Inventory desk</p>
           <p className="mt-1 text-sm text-[#8a8496]">Products, receiving, counts, barcodes, and suppliers.</p>
+        </Link>
+        <Link href="/labels" className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
+          <p className="text-lg font-extrabold text-[#2f6fe0]">Needs labels ({labelCount})</p>
+          <p className="mt-1 text-sm text-[#8a8496]">Print the deliveries that do not have labels yet.</p>
         </Link>
         <Link href="/quality" className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
           <p className="text-lg font-extrabold text-[#2f6fe0]">Needs a look</p>

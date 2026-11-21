@@ -1,2 +1,2 @@
-title,category,variant_code,variant_title,vendor_sku,vendor_barcode,price,cost,brand,texture,season,size,material,age_guidance,new_arrival,supplier,description
-Honey Sample Bear,SQ,STD,Default,SAMPLE-HONEY,810000000001,12.00,4.50,Mochi Lane,mochi,spring,palm,TPE,3+,yes,Mochi Lane,A sample row for the CSV import.
+title,category,variant_code,variant_title,vendor_sku,vendor_barcode,price,cost,brand,texture,season,size,material,age_guidance,new_arrival,supplier,description,received_at,on_hand
+Honey Sample Bear,SQ,STD,Default,SAMPLE-HONEY,810000000001,12.00,4.50,Mochi Lane,mochi,spring,palm,TPE,3+,yes,Mochi Lane,A sample row for the CSV import.,2026-11-10,4

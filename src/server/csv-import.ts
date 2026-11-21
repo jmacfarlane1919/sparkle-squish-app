@@ -11,6 +11,7 @@ import {
 } from "@/lib/identifiers";
 import { rowsToRecords } from "@/lib/csv";
 import { prisma } from "@/lib/db";
+import { enqueueImport } from "@/server/label-queue";
 
 export type CsvPreview = {
   ready: { line: number; summary: string }[];
@@ -112,6 +113,16 @@ export async function importProducts(text: string) {
     });
     const known = await prisma.category.findUnique({ where: { code: category } });
     if (!known) await prisma.category.create({ data: { code: category, name: category, sortOrder: 99 } });
+    const receivedOn = value(record, "received_at", "s_s_received_date");
+    const receivedDay = receivedOn.match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    const onHand = Number(value(record, "on_hand") || "0");
+    if (product.variants[0] && receivedDay) {
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { receivedAt: new Date(`${receivedDay}T12:00:00Z`) },
+      });
+      await enqueueImport(product.variants[0].id, receivedDay, Number.isFinite(onHand) ? onHand : 0);
+    }
     imported += 1;
   }
   return { imported, errors: [] as CsvPreview["errors"] };

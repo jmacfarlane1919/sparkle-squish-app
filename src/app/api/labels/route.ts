@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   });
   const pdf = await renderLabels(
     variants.map((variant) => ({
-      title: variant.title === "Default" ? variant.product.title : `${variant.product.title} ${variant.title}`,
+      name: variant.title === "Default" ? variant.product.title : `${variant.product.title} · ${variant.title}`,
       price: formatMoney(variant.priceCents),
       sku: variant.ssSku,
       barcode: variant.ssBarcode,

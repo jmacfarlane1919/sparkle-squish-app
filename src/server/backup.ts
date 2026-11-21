@@ -20,6 +20,8 @@ export async function exportBackup() {
       include: { lines: true, refunds: { include: { lines: true } } },
     }),
     flags: await prisma.featureFlag.findMany(),
+    labelQueue: await prisma.labelQueueItem.findMany(),
+    labelPrints: await prisma.labelPrintJob.findMany(),
   };
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const key = `backups/ss-backup-${stamp}.json`;

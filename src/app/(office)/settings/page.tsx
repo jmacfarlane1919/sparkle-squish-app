@@ -6,18 +6,20 @@ import { prisma } from "@/lib/db";
 import { SHOP, getAppUrl, isDemoMode, shopifyConfigured, shopifyDomain } from "@/lib/env";
 import { FEATURES } from "@/lib/features";
 import { NEXT_FREE_BARCODE, allocateBarcode } from "@/lib/identifiers";
-import { previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, toggleFeature } from "@/server/actions/settings";
+import { DEFAULT_LABELS_PRINTED_THROUGH } from "@/lib/labels/queue";
+import { previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature } from "@/server/actions/settings";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const params = await searchParams;
-  const [flags, categories, counter, barcodes, lastBackup, runs] = await Promise.all([
+  const [flags, categories, counter, barcodes, lastBackup, labelCutoff, runs] = await Promise.all([
     prisma.featureFlag.findMany(),
     prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.barcodeCounter.findUnique({ where: { id: "series" } }),
     prisma.variant.findMany({ select: { ssBarcode: true } }),
     prisma.appSetting.findUnique({ where: { key: "last_backup" } }),
+    prisma.appSetting.findUnique({ where: { key: "labels_printed_through" } }),
     prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 5 }),
   ]);
   const nextBarcode = counter ? allocateBarcode(counter.lastIssued, barcodes.map((row) => row.ssBarcode).filter(Boolean)) : NEXT_FREE_BARCODE;
@@ -44,6 +46,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="font-extrabold text-[#2f6fe0]">S&S barcode series</h2>
         <p className="mt-2 text-sm">Last issued {counter?.lastIssued}. Next free {nextBarcode}.</p>
         <p className="mt-1 text-xs text-[#8a8496]">Codes only move forward. A used code is never given out again.</p>
+      </section>
+      <section className="rounded-[22px] bg-white p-4">
+        <h2 className="font-extrabold text-[#2f6fe0]">Labels printed through</h2>
+        <p className="mt-1 text-sm text-[#8a8496]">Everything delivered on this date or earlier is already labeled. A Shopify import puts later received dates into Needs labels.</p>
+        <form action={saveLabelCutoff} className="mt-3 flex items-end gap-2">
+          <Field label="Date">
+            <Input name="cutoff" type="date" defaultValue={labelCutoff?.value || DEFAULT_LABELS_PRINTED_THROUGH} required />
+          </Field>
+          <Button type="submit" variant="secondary">Save</Button>
+        </form>
       </section>
       <section className="rounded-[22px] bg-white p-4">
         <h2 className="font-extrabold text-[#2f6fe0]">Categories</h2>

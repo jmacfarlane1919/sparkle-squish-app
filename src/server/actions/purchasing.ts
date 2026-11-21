@@ -7,6 +7,7 @@ import { matchField } from "@/lib/identifiers";
 import { planReceive } from "@/lib/receive";
 import { prisma } from "@/lib/db";
 import { executeFeature } from "@/server/shopify-exec";
+import { enqueueReceipt } from "@/server/label-queue";
 import { go } from "@/server/nav";
 
 function text(formData: FormData, key: string) {
@@ -164,7 +165,17 @@ export async function receiveLine(formData: FormData) {
         },
       },
     },
+    include: { lines: true },
   });
+  const receiptLine = receipt.lines[0];
+  if (receiptLine) {
+    await enqueueReceipt({
+      receiptLineId: receiptLine.id,
+      variantId: line.variant.id,
+      qty,
+      receivedAt: receipt.receivedAt,
+    });
+  }
   await prisma.purchaseOrderLine.update({ where: { id: line.id }, data: { qtyReceived: line.qtyReceived + qty } });
   await prisma.variant.update({ where: { id: line.variant.id }, data: { costCents: plan.newCostCents } });
   await prisma.stockLevel.upsert({
@@ -197,7 +208,7 @@ export async function receiveLine(formData: FormData) {
   });
   revalidatePath("/inventory");
   go(`/receive/${po.id}`, {
-    notice: `Checked in ${qty}. On hand is now ${plan.newOnHand}. ${stock.result}`,
+    notice: `Checked in ${qty}. On hand is now ${plan.newOnHand}. Added to Needs labels. ${stock.result}`,
   });
 }
 

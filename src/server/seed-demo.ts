@@ -1,6 +1,7 @@
 import { FEATURES } from "@/lib/features";
 import { chicagoDateKey, chicagoDateTime, shiftDateKey } from "@/lib/format";
 import { LAST_ISSUED_BARCODE, ean13FromBody } from "@/lib/identifiers";
+import { enqueueReceipt } from "@/server/label-queue";
 import { shopifyConfigured } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { saveBytes } from "@/lib/storage";
@@ -469,6 +470,8 @@ export async function seedDemo() {
     throw new Error("Refusing to load demo data because SHOPIFY_ADMIN_TOKEN is set.");
   }
   await prisma.$transaction([
+    prisma.labelQueueItem.deleteMany(),
+    prisma.labelPrintJob.deleteMany(),
     prisma.refundLine.deleteMany(),
     prisma.refund.deleteMany(),
     prisma.saleLine.deleteMany(),
@@ -511,6 +514,7 @@ export async function seedDemo() {
   await prisma.appSetting.createMany({
     data: [
       { key: "po_next", value: "1058" },
+      { key: "labels_printed_through", value: "2026-11-06" },
       { key: "timezone", value: "America/Chicago" },
       { key: "currency", value: "USD" },
     ],
@@ -551,7 +555,7 @@ export async function seedDemo() {
         material: item.material,
         ageGuidance: item.age,
         newArrival: Boolean(item.newArrival),
-        receivedAt: onHand > 0 ? chicagoDateTime(shiftDateKey(chicagoDateKey(new Date()), -12), 11) : null,
+        receivedAt: onHand > 0 ? chicagoDateTime("2026-11-01", 11) : null,
         categoryCode: item.category,
         supplierId: suppliers.get(item.supplier),
       },
@@ -655,7 +659,7 @@ export async function seedDemo() {
       });
       for (const line of input.receipt.lines) {
         const variant = variantIds.get(line.sku);
-        await prisma.receiptLine.create({
+        const receiptLine = await prisma.receiptLine.create({
           data: {
             receiptId: receipt.id,
             purchaseOrderLineId: lineIds.get(line.sku) || "",
@@ -668,6 +672,18 @@ export async function seedDemo() {
             newCostCents: input.lines.find((row) => row.sku === line.sku)?.cost || 0,
           },
         });
+        if (variant?.id) {
+          await enqueueReceipt({
+            receiptLineId: receiptLine.id,
+            variantId: variant.id,
+            qty: line.qty,
+            receivedAt: receipt.receivedAt,
+          });
+          await prisma.product.update({
+            where: { id: variant.product },
+            data: { receivedAt: receipt.receivedAt },
+          });
+        }
       }
     }
   }
@@ -811,6 +827,34 @@ export async function seedDemo() {
     const sku = rotation[daysAgo % rotation.length];
     await sell(daysAgo, 11, 5, daysAgo % 2 === 0 ? "pos" : "online", sku, 1);
     await sell(daysAgo, 15, 45, daysAgo % 2 === 0 ? "online" : "pos", rotation[(daysAgo + 2) % rotation.length], 1);
+  }
+
+  const clicky = await prisma.labelQueueItem.findFirst({
+    where: { variant: { ssSku: "SS-FG-021-STD" }, status: "needs_labels" },
+    include: { variant: { include: { product: true } } },
+  });
+  if (clicky) {
+    const job = await prisma.labelPrintJob.create({
+      data: {
+        size: "thermal-225",
+        labelCount: clicky.printQty,
+        printedAt: chicagoDateTime("2026-11-19", 16),
+        snapshot: JSON.stringify([
+          {
+            queueItemId: clicky.id,
+            name: clicky.variant.product.title,
+            price: "$9.00",
+            sku: clicky.variant.ssSku,
+            barcode: clicky.variant.ssBarcode,
+            qty: clicky.printQty,
+          },
+        ]),
+      },
+    });
+    await prisma.labelQueueItem.update({
+      where: { id: clicky.id },
+      data: { status: "printed", printedAt: job.printedAt, printedCount: clicky.printQty, printJobId: job.id },
+    });
   }
 
   await prisma.auditLog.create({

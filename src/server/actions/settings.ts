@@ -18,6 +18,7 @@ import { exportBackup } from "@/server/backup";
 import { executeFeature } from "@/server/shopify-exec";
 import { importFromShopify, reconcile } from "@/server/shopify-sync";
 import { seedDemo } from "@/server/seed-demo";
+import { dateOnly } from "@/lib/labels/queue";
 import { go } from "@/server/nav";
 
 function text(formData: FormData, key: string) {
@@ -112,6 +113,17 @@ export async function toggleFeature(formData: FormData) {
   go("/settings", {
     notice: enabled ? `${feature.label} is on. New changes in that area will be sent to Shopify.` : `${feature.label} is off.`,
   });
+}
+
+export async function saveLabelCutoff(formData: FormData) {
+  const cutoff = dateOnly(text(formData, "cutoff"));
+  if (!cutoff) go("/settings", { error: "Use a date like 2026-11-06." });
+  await prisma.appSetting.upsert({
+    where: { key: "labels_printed_through" },
+    update: { value: cutoff },
+    create: { key: "labels_printed_through", value: cutoff },
+  });
+  go("/settings", { notice: `Labels are marked printed through ${cutoff}. The next Shopify import uses that date.` });
 }
 
 export async function saveCategory(formData: FormData) {

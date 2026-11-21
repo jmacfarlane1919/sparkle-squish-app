@@ -18,6 +18,7 @@ import { buildBrandedPhotoOperations, buildProductBasicsOperations, describeProd
 import { runShopifyOperation } from "@/lib/shopify/client";
 import { recordAudit } from "@/server/audit";
 import { executeFeature, featureEnabled } from "@/server/shopify-exec";
+import { enqueueNewProduct } from "@/server/label-queue";
 import { go } from "@/server/nav";
 
 function requiredText(formData: FormData, key: string) {
@@ -165,6 +166,7 @@ export async function createProduct(formData: FormData) {
   });
 
   await pushProduct(product.id);
+  if (product.variants[0]) await enqueueNewProduct(product.variants[0].id, 0);
   revalidatePath("/");
   const variant = product.variants[0];
   go(`/products/${product.id}`, {
@@ -237,7 +239,7 @@ export async function addVariant(formData: FormData) {
   const counter = await prisma.barcodeCounter.findUnique({ where: { id: "series" } });
   const ssBarcode = allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, all.map((row) => row.ssBarcode).filter(Boolean));
   const locations = await prisma.location.findMany();
-  await prisma.$transaction(async (tx) => {
+  const createdVariant = await prisma.$transaction(async (tx) => {
     const created = await tx.variant.create({
       data: {
         productId,
@@ -258,7 +260,9 @@ export async function addVariant(formData: FormData) {
       });
     }
     await tx.barcodeCounter.update({ where: { id: "series" }, data: { lastIssued: ssBarcode } });
+    return created;
   });
+  await enqueueNewProduct(createdVariant.id, 0);
   await pushProduct(productId);
   go(`/products/${productId}`, { notice: `Added variant ${ssSku}.` });
 }

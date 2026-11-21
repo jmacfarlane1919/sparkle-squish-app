@@ -51,6 +51,7 @@ export function HubCard({
   icon: Icon,
   tile,
   ink,
+  badge,
 }: {
   href: string;
   title: string;
@@ -58,6 +59,7 @@ export function HubCard({
   icon: LucideIcon;
   tile: string;
   ink: string;
+  badge?: string;
 }) {
   return (
     <Link href={href} className="flex min-h-36 flex-col justify-between rounded-[22px] bg-white p-3.5 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
@@ -68,6 +70,7 @@ export function HubCard({
         <span>
           <span className="block text-[15px] font-extrabold leading-tight text-[#2f6fe0]">{title}</span>
           <span className="mt-1 block text-[12px] leading-snug text-[#8a8496]">{description}</span>
+          {badge ? <span className="mt-2 inline-flex rounded-full bg-[#f8d5e4] px-2 py-0.5 text-[10px] font-extrabold text-[#a24bb5]">{badge}</span> : null}
         </span>
         <ChevronRight className="mb-0.5 h-4 w-4 shrink-0 text-[#c5bfd2]" />
       </span>

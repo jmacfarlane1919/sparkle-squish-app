@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/db";
-import { centsToDollarInput, formatMoney, onHand } from "@/lib/format";
+import { centsToDollarInput, formatMoney, formatWhen, onHand } from "@/lib/format";
 import { buildProductBasicsOperations, describeProductWrite } from "@/lib/shopify/payloads";
 import { addVariant, sendBrandedPhoto, sendProduct, updateProduct, uploadPhoto } from "@/server/actions/products";
 import { notFound } from "next/navigation";
@@ -25,7 +25,7 @@ export default async function ProductPage({
     include: {
       supplier: true,
       photos: { orderBy: { createdAt: "desc" } },
-      variants: { include: { levels: { include: { location: true } } }, orderBy: { position: "asc" } },
+      variants: { include: { levels: { include: { location: true } }, labelItems: true }, orderBy: { position: "asc" } },
     },
   });
   if (!product) notFound();
@@ -89,6 +89,7 @@ export default async function ProductPage({
             <p className="mt-1 text-xs text-[#8a8496]">These stay in Shopify’s own SKU and barcode fields. Saving here does not write those fields.</p>
           </div>
           <p className="mt-3 text-sm">{formatMoney(variant.priceCents)} · cost {formatMoney(variant.costCents)} · {onHand(variant.levels)} on hand</p>
+          <LabelStatus items={variant.labelItems} />
           <ul className="mt-2 text-xs text-[#8a8496]">
             {variant.levels.map((level) => (
               <li key={level.id}>{level.location.name}: {level.available}</li>
@@ -190,5 +191,18 @@ export default async function ProductPage({
         </details>
       </section>
     </div>
+  );
+}
+
+function LabelStatus({ items }: { items: { status: string; printQty: number; printedCount: number; printedAt: Date | null }[] }) {
+  const waiting = items.filter((item) => item.status === "needs_labels").reduce((sum, item) => sum + item.printQty, 0);
+  const printed = items.filter((item) => item.status === "printed");
+  const printedCount = printed.reduce((sum, item) => sum + item.printedCount, 0);
+  const latest = printed.map((item) => item.printedAt).filter((date): date is Date => Boolean(date)).sort((a, b) => b.getTime() - a.getTime())[0];
+  if (!waiting && !printedCount) return null;
+  return (
+    <p className="mt-1 text-sm font-bold text-[#a24bb5]">
+      {waiting ? `Needs labels · ${waiting}` : `Printed ${latest ? formatWhen(latest) : ""} · ${printedCount} labels`}
+    </p>
   );
 }
