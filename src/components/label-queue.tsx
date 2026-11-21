@@ -22,7 +22,7 @@ export function LabelQueue({ groups }: { groups: { date: string; label: string; 
   const all = useMemo(() => groups.flatMap((group) => group.items), [groups]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [qty, setQty] = useState<Record<string, number>>(() => Object.fromEntries(all.map((item) => [item.id, item.printQty])));
-  const [size, setSize] = useState("thermal-225");
+  const [size, setSize] = useState("niimbot-40x20");
   const selectedIds = all.filter((item) => selected[item.id]).map((item) => item.id);
   const stickerCount = selectedIds.reduce((sum, id) => sum + (qty[id] || 0), 0);
 
@@ -101,7 +101,10 @@ export function LabelQueue({ groups }: { groups: { date: string; label: string; 
       ))}
       <div className="sticky bottom-20 z-10 flex flex-wrap items-center gap-2 rounded-[22px] bg-white p-3 shadow-[0_8px_24px_rgba(80,60,110,0.12)]">
         <Button type="submit">Print selected{selectedIds.length ? ` (${stickerCount})` : ""}</Button>
-        <button formAction="/api/labels/report?format=csv" formMethod="post" className="h-11 rounded-2xl bg-[#e7dff8] px-4 text-sm font-extrabold text-[#4c3d73]">
+        <button formAction="/api/labels/niimbot" formMethod="post" className="h-11 rounded-2xl bg-[#e7dff8] px-4 text-sm font-extrabold text-[#4c3d73]">
+          Export for NIIMBOT
+        </button>
+        <button formAction="/api/labels/report?format=csv" formMethod="post" className="h-11 rounded-2xl bg-[#f7f4fb] px-4 text-sm font-extrabold text-[#4c3d73]">
           CSV
         </button>
         <button formAction="/api/labels/report?format=pdf" formMethod="post" className="h-11 rounded-2xl border border-[#e4dced] bg-white px-4 text-sm font-extrabold">

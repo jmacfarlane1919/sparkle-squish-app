@@ -14,18 +14,26 @@ export type LabelSize = {
 };
 
 const inch = 72;
+const mm = inch / 25.4;
 
 export const LABEL_SIZES: LabelSize[] = [
   {
+    id: "niimbot-40x20",
+    label: "NIIMBOT 40 × 20 mm",
+    width: 40 * mm,
+    height: 20 * mm,
+    kind: "roll",
+  },
+  {
     id: "thermal-225",
-    label: "Thermal 2.25 × 1.25 in",
+    label: "Rollo 2.25 × 1.25 in",
     width: 2.25 * inch,
     height: 1.25 * inch,
     kind: "roll",
   },
   {
     id: "thermal-2",
-    label: "Thermal 2 × 1 in",
+    label: "Rollo 2 × 1 in",
     width: 2 * inch,
     height: 1 * inch,
     kind: "roll",
@@ -47,5 +55,5 @@ export const LABEL_SIZES: LabelSize[] = [
 ];
 
 export function labelSize(id: string) {
-  return LABEL_SIZES.find((size) => size.id === id) ?? LABEL_SIZES[2];
+  return LABEL_SIZES.find((size) => size.id === id) ?? LABEL_SIZES[0];
 }

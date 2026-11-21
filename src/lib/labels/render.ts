@@ -16,7 +16,7 @@ export function expandLabels(items: PrintableLabel[]) {
   });
 }
 
-export async function renderLabels(items: PrintableLabel[], sizeId = "avery") {
+export async function renderLabels(items: PrintableLabel[], sizeId = "niimbot-40x20") {
   const size = labelSize(sizeId);
   const copies = expandLabels(items);
   const pdf = await PDFDocument.create();
