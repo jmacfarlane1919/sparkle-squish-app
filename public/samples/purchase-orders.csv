@@ -1,0 +1,2 @@
+po_number,supplier,status,location,ordered_at,invoice,sku,qty_ordered,qty_received,unit_cost,notes
+PO-SAMPLE,Mochi Lane,draft,The Squishy Shop,,,SS-SQ-043-STD,6,0,5.25,Sample purchase order row

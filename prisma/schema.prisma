@@ -1,0 +1,301 @@
+// S&S Software
+// Local demo uses SQLite. Before deploying, change provider to "postgresql"
+// (npm run use-postgres) and point DATABASE_URL at your hosted Postgres.
+// The models below stay the same on both.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model BarcodeCounter {
+  id         String   @id
+  lastIssued String
+  updatedAt  DateTime @updatedAt
+}
+
+model AppSetting {
+  key   String @id
+  value String
+}
+
+model Location {
+  id                String           @id @default(cuid())
+  name              String
+  channel           String
+  shopifyLocationId String?          @unique
+  isDefaultReceive  Boolean          @default(false)
+  stockLevels       StockLevel[]
+  purchaseOrders    PurchaseOrder[]
+  counts            InventoryCount[]
+}
+
+model Supplier {
+  id             String          @id @default(cuid())
+  name           String
+  contactName    String          @default("")
+  email          String          @default("")
+  phone          String          @default("")
+  notes          String          @default("")
+  createdAt      DateTime        @default(now())
+  products       Product[]
+  purchaseOrders PurchaseOrder[]
+}
+
+model Product {
+  id               String    @id @default(cuid())
+  title            String
+  description      String    @default("")
+  status           String    @default("active")
+  shopifyProductId String?   @unique
+  brand            String    @default("")
+  texture          String    @default("")
+  season           String    @default("")
+  size             String    @default("")
+  material         String    @default("")
+  ageGuidance      String    @default("")
+  newArrival       Boolean   @default(false)
+  receivedAt       DateTime?
+  categoryCode     String    @default("")
+  supplierId       String?
+  supplier         Supplier? @relation(fields: [supplierId], references: [id])
+  variants         Variant[]
+  photos           Photo[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Variant {
+  id                     String               @id @default(cuid())
+  productId              String
+  product                Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  title                  String               @default("Default")
+  variantCode            String               @default("STD")
+  vendorSku              String               @default("")
+  vendorBarcode          String               @default("")
+  otherBarcodes          String               @default("")
+  ssSku                  String               @default("")
+  ssBarcode              String               @default("")
+  priceCents             Int                  @default(0)
+  costCents              Int?
+  shopifyVariantId       String?              @unique
+  shopifyInventoryItemId String?
+  position               Int                  @default(0)
+  levels                 StockLevel[]
+  poLines                PurchaseOrderLine[]
+  receiptLines           ReceiptLine[]
+  countLines             InventoryCountLine[]
+  saleLines              SaleLine[]
+  refundLines            RefundLine[]
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  @@index([ssSku])
+  @@index([ssBarcode])
+  @@index([vendorSku])
+  @@index([vendorBarcode])
+}
+
+model StockLevel {
+  id         String   @id @default(cuid())
+  variantId  String
+  variant    Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  available  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([variantId, locationId])
+}
+
+model Photo {
+  id            String    @id @default(cuid())
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  role          String
+  storageKey    String
+  alt           String    @default("")
+  contentType   String    @default("image/svg+xml")
+  shopifyFileId String?
+  pushedAt      DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+model PurchaseOrder {
+  id            String              @id @default(cuid())
+  number        String              @unique
+  supplierId    String
+  supplier      Supplier            @relation(fields: [supplierId], references: [id])
+  locationId    String
+  location      Location            @relation(fields: [locationId], references: [id])
+  status        String              @default("draft")
+  invoiceNumber String              @default("")
+  notes         String              @default("")
+  orderedAt     DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  lines         PurchaseOrderLine[]
+  receipts      Receipt[]
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variantId       String?
+  variant         Variant?      @relation(fields: [variantId], references: [id])
+  description     String        @default("")
+  qtyOrdered      Int
+  qtyReceived     Int           @default(0)
+  unitCostCents   Int
+  receiptLines    ReceiptLine[]
+}
+
+model Receipt {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  receivedAt      DateTime      @default(now())
+  note            String        @default("")
+  shopifyStatus   String        @default("pending")
+  lines           ReceiptLine[]
+}
+
+model ReceiptLine {
+  id                  String            @id @default(cuid())
+  receiptId           String
+  receipt             Receipt           @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
+  variantId           String?
+  variant             Variant?          @relation(fields: [variantId], references: [id])
+  qty                 Int
+  unitCostCents       Int
+  previousOnHand      Int
+  previousCostCents   Int?
+  newOnHand           Int
+  newCostCents        Int
+}
+
+model InventoryCount {
+  id          String               @id @default(cuid())
+  locationId  String
+  location    Location             @relation(fields: [locationId], references: [id])
+  status      String               @default("open")
+  startedAt   DateTime             @default(now())
+  committedAt DateTime?
+  note        String               @default("")
+  lines       InventoryCountLine[]
+}
+
+model InventoryCountLine {
+  id               String         @id @default(cuid())
+  countId          String
+  count            InventoryCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  variantId        String
+  variant          Variant        @relation(fields: [variantId], references: [id])
+  systemQtyAtStart Int
+  countedQty       Int
+  salesDuringCount Int            @default(0)
+  commitAction     String         @default("")
+  commitDetail     String         @default("")
+  createdAt        DateTime       @default(now())
+
+  @@unique([countId, variantId])
+}
+
+model SaleOrder {
+  id              String     @id @default(cuid())
+  shopifyOrderId  String?    @unique
+  name            String
+  channel         String
+  locationName    String     @default("")
+  processedAt     DateTime
+  financialStatus String     @default("")
+  cancelled       Boolean    @default(false)
+  lines           SaleLine[]
+  refunds         Refund[]
+}
+
+model SaleLine {
+  id             String    @id @default(cuid())
+  orderId        String
+  order          SaleOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shopifyLineId  String?
+  variantId      String?
+  variant        Variant?  @relation(fields: [variantId], references: [id])
+  title          String
+  sku            String    @default("")
+  qty            Int
+  unitPriceCents Int
+  unitCostCents  Int?
+}
+
+model Refund {
+  id              String       @id @default(cuid())
+  orderId         String
+  order           SaleOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shopifyRefundId String?      @unique
+  processedAt     DateTime
+  lines           RefundLine[]
+}
+
+model RefundLine {
+  id            String   @id @default(cuid())
+  refundId      String
+  refund        Refund   @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  variantId     String?
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  title         String
+  qty           Int
+  amountCents   Int
+  unitCostCents Int?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  feature   String
+  action    String
+  mode      String
+  summary   String
+  payload   String   @default("")
+  result    String   @default("")
+}
+
+model FeatureFlag {
+  key         String  @id
+  enabled     Boolean @default(false)
+  label       String
+  description String  @default("")
+}
+
+model SyncRun {
+  id         String    @id @default(cuid())
+  kind       String
+  status     String
+  detail     String    @default("")
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  webhookId String?  @unique
+  topic     String
+  status    String
+  detail    String   @default("")
+  createdAt DateTime @default(now())
+}
