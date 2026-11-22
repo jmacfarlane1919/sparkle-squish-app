@@ -25,6 +25,7 @@ export default async function PurchaseOrderPage({
       supplier: true,
       location: true,
       receipts: { include: { lines: true }, orderBy: { receivedAt: "desc" } },
+      invoices: { include: { attachments: { orderBy: { filename: "asc" } } }, orderBy: { invoiceDate: "desc" } },
       lines: { include: { variant: { include: { product: true } } } },
     },
   });
@@ -92,6 +93,25 @@ export default async function PurchaseOrderPage({
           <Button type="submit" variant="secondary">Add line</Button>
         </form>
       ) : null}
+      <h2 className="mb-2 mt-6 text-sm font-extrabold text-[#8a8496]">Invoices</h2>
+      {order.invoices.length === 0 ? <p className="mb-4 text-sm text-[#8a8496]">No invoice is linked to this order.</p> : null}
+      <div className="mb-4 space-y-2">
+        {order.invoices.map((invoice) => (
+          <section key={invoice.id} className="rounded-2xl bg-white px-4 py-3 text-sm">
+            <p className="font-extrabold">
+              <a className="text-[#2f6fe0]" href={`/invoices/${invoice.id}`}>{invoice.vendorName} · {invoice.invoiceNumber}</a>
+            </p>
+            <p className="text-xs text-[#8a8496]">{invoice.status} · {formatMoney(invoice.totalCents)}</p>
+            <ul className="mt-2 space-y-1">
+              {invoice.attachments.map((file) => (
+                <li key={file.id}>
+                  <a className="font-extrabold text-[#2f6fe0]" href={`/api/invoices/files/${file.id}`} target="_blank" rel="noreferrer">{file.filename}</a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
       <h2 className="mb-2 mt-6 text-sm font-extrabold text-[#8a8496]">Receipts</h2>
       {order.receipts.map((receipt) => (
         <p key={receipt.id} className="mb-2 rounded-2xl bg-white px-4 py-3 text-sm">

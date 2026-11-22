@@ -22,6 +22,7 @@ export default async function SupplierPage({
     include: {
       products: { include: { variants: true }, orderBy: { title: "asc" } },
       purchaseOrders: { include: { lines: true }, orderBy: { createdAt: "desc" } },
+      invoices: { orderBy: { invoiceDate: "desc" } },
     },
   });
   if (!supplier) notFound();
@@ -45,6 +46,16 @@ export default async function SupplierPage({
           <Link key={order.id} href={`/receive/${order.id}`} className="block rounded-2xl bg-white px-4 py-3">
             <p className="font-extrabold">{order.number} · {order.status}</p>
             <p className="text-xs text-[#8a8496]">{order.invoiceNumber ? `Invoice ${order.invoiceNumber}` : "No invoice yet"} · {order.lines.length} lines</p>
+          </Link>
+        ))}
+      </div>
+      <h2 className="mb-2 mt-6 text-sm font-extrabold text-[#8a8496]">Invoices</h2>
+      <div className="space-y-2">
+        {supplier.invoices.length === 0 ? <p className="text-sm text-[#8a8496]">No invoices for this supplier yet.</p> : null}
+        {supplier.invoices.map((invoice) => (
+          <Link key={invoice.id} href={`/invoices/${invoice.id}`} className="block rounded-2xl bg-white px-4 py-3">
+            <p className="font-extrabold">{invoice.invoiceNumber}</p>
+            <p className="text-xs text-[#8a8496]">{invoice.status} · {formatMoney(invoice.totalCents)}</p>
           </Link>
         ))}
       </div>

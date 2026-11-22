@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { s3Configured } from "@/lib/env";
 
@@ -53,4 +53,22 @@ export async function readBytes(key: string) {
   } catch {
     return null;
   }
+}
+
+export async function deleteBytes(key: string) {
+  if (s3Configured()) {
+    const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    const client = new S3Client({
+      region: process.env.S3_REGION || "auto",
+      endpoint: process.env.S3_ENDPOINT || undefined,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
+      },
+    });
+    await client.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET || "", Key: key }));
+    return;
+  }
+  await rm(localPath(key), { force: true });
 }

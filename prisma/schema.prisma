@@ -52,6 +52,7 @@ model Supplier {
   createdAt      DateTime        @default(now())
   products       Product[]
   purchaseOrders PurchaseOrder[]
+  invoices       Invoice[]
 }
 
 model Product {
@@ -149,6 +150,46 @@ model PurchaseOrder {
   updatedAt     DateTime            @updatedAt
   lines         PurchaseOrderLine[]
   receipts      Receipt[]
+  invoices      Invoice[]
+}
+
+model Invoice {
+  id              String              @id @default(cuid())
+  dedupeKey       String              @unique
+  invoiceNumber   String
+  vendorName      String
+  supplierId      String?
+  supplier        Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  invoiceDate     DateTime
+  status          String
+  totalCents      Int
+  category        String              @default("")
+  paidFrom        String              @default("")
+  subtotalCents   Int?
+  discountCents   Int?
+  shippingCents   Int?
+  taxCents        Int?
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  attachments     InvoiceAttachment[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([purchaseOrderId])
+  @@index([supplierId])
+  @@index([invoiceDate])
+}
+
+model InvoiceAttachment {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  filename    String
+  storageKey  String
+  contentType String
+  createdAt   DateTime @default(now())
+
+  @@unique([invoiceId, filename])
 }
 
 model PurchaseOrderLine {

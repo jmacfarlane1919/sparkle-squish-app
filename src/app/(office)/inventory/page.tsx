@@ -1,4 +1,4 @@
-import { ClipboardList, Package, PackagePlus, ScanBarcode, Tag, Truck } from "lucide-react";
+import { ClipboardList, FileText, Package, PackagePlus, ScanBarcode, Tag, Truck } from "lucide-react";
 import { HubCard, PageIntro, StatTile } from "@/components/bits";
 import { prisma } from "@/lib/db";
 import { formatWhen } from "@/lib/format";
@@ -42,6 +42,7 @@ export default async function InventoryPage() {
         <HubCard href="/counts" title="Inventory count" description="count and update stock" icon={ClipboardList} tile="#d4f1ea" ink="#1f8a78" />
         <HubCard href="/lookup" title="Barcode lookup" description="scan an S&S or supplier barcode" icon={ScanBarcode} tile="#d9e7fb" ink="#3a6fbf" />
         <HubCard href="/suppliers" title="Supplier Management" description="contacts, invoices & purchased items" icon={Truck} tile="#fde4c4" ink="#c47a2b" />
+        <HubCard href="/invoices" title="Invoices" description="saved bills and their files" icon={FileText} tile="#d9f0e3" ink="#1f7a4d" />
         <HubCard href="/labels" title="Barcode labels" description="print S&S product labels" icon={Tag} tile="#f0d9f6" ink="#a24bb5" badge={labelCount ? `Needs labels (${labelCount})` : undefined} />
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2">
