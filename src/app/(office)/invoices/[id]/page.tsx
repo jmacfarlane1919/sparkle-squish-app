@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActionForm } from "@/components/action-form";
 import { BackLink, Notice, PageIntro } from "@/components/bits";
 import { BooksLines } from "@/components/books-lines";
 import { CustomFields } from "@/components/custom-fields";
@@ -60,7 +61,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         {moneyLine("Shipping", invoice.shippingCents)}
         {moneyLine("Tax", invoice.taxCents)}
       </section>
-      <form action={saveInvoiceBooks} className="mt-4 space-y-3 rounded-[22px] bg-white p-4">
+      <ActionForm action={saveInvoiceBooks} className="mt-4 space-y-3 rounded-[22px] bg-white p-4">
         <h2 className="font-extrabold">Put this bill in the books</h2>
         <p className="text-sm text-[#8a8496]">Inventory is the first guess. Turn on the equipment box for something you keep. Leave “I already paid” off if you still owe it.</p>
         <input type="hidden" name="invoiceId" value={invoice.id} />
@@ -84,7 +85,7 @@ export default async function InvoicePage({ params, searchParams }: { params: Pr
         <label className="block text-sm font-extrabold">Photos<input name="files" type="file" accept="image/*,.pdf" multiple className="mt-1 block w-full text-sm" /></label>
         <CustomFields fields={fields} />
         <Button type="submit">Save in the books</Button>
-      </form>
+      </ActionForm>
       {!invoice.paymentEntryId && invoice.billEntryId ? (
         <form action={payInvoice} className="mt-3 space-y-2 rounded-[22px] bg-white p-4">
           <input type="hidden" name="invoiceId" value={invoice.id} />

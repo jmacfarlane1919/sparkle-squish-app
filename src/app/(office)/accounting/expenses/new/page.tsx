@@ -1,3 +1,4 @@
+import { ActionForm } from "@/components/action-form";
 import { Notice, PageIntro } from "@/components/bits";
 import { BooksLines } from "@/components/books-lines";
 import { CustomFields } from "@/components/custom-fields";
@@ -20,7 +21,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: P
     <div className="mx-auto max-w-xl">
       <PageIntro title="New expense" subtitle="What you paid, which account paid it, and what it was for." />
       <Notice error={params.error} />
-      <form action={saveExpense} className="space-y-3 rounded-[22px] bg-white p-4">
+      <ActionForm action={saveExpense} className="space-y-3 rounded-[22px] bg-white p-4">
         <label className="block text-sm font-extrabold">Date<input name="date" type="date" required className="mt-1 h-11 w-full rounded-2xl border border-[#e4dced] px-3" /></label>
         <label className="block text-sm font-extrabold">Who you paid<input name="vendor" required className="mt-1 h-11 w-full rounded-2xl border border-[#e4dced] px-3" /></label>
         <label className="block text-sm font-extrabold">Saved supplier, if any
@@ -49,7 +50,7 @@ export default async function NewExpensePage({ searchParams }: { searchParams: P
         </label>
         <CustomFields fields={fields.map((field) => ({ ...field, value: "" }))} />
         <Button type="submit">Save expense</Button>
-      </form>
+      </ActionForm>
     </div>
   );
 }

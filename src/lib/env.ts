@@ -21,6 +21,14 @@ export function isDemoMode() {
   return !shopifyConfigured();
 }
 
+/** Sample products load only for a local demo, or when DEMO_MODE=true. A live site stays empty. */
+export function shouldLoadDemo() {
+  if (process.env.DEMO_MODE === "true") return true;
+  if (process.env.DEMO_MODE === "false") return false;
+  if (process.env.VERCEL === "1") return false;
+  return process.env.NODE_ENV !== "production";
+}
+
 export function getSessionSecret() {
   const secret = process.env.SESSION_SECRET || "";
   if (secret.length >= 24) return secret;

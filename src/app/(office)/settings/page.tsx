@@ -3,16 +3,20 @@ import { Field, Notice, PageIntro } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
-import { SHOP, getAppUrl, isDemoMode, shopifyConfigured, shopifyDomain } from "@/lib/env";
+import { SHOP, getAppUrl, shopifyConfigured, shopifyDomain, shouldLoadDemo } from "@/lib/env";
+import { getSession } from "@/lib/auth";
+import { isOwnerEmail } from "@/lib/owner";
 import { FEATURES } from "@/lib/features";
 import { NEXT_FREE_BARCODE, allocateBarcode } from "@/lib/identifiers";
 import { DEFAULT_LABELS_PRINTED_THROUGH } from "@/lib/labels/queue";
-import { previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature, toggleNiimbotBluetooth } from "@/server/actions/settings";
+import { checkFileStorage, clearSampleData, previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature, toggleNiimbotBluetooth } from "@/server/actions/settings";
 
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string }> }) {
   const params = await searchParams;
+  const session = await getSession();
+  const owner = Boolean(session && (await isOwnerEmail(session.email)));
   const [flags, categories, counter, barcodes, lastBackup, labelCutoff, bluetooth, runs] = await Promise.all([
     prisma.featureFlag.findMany(),
     prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -116,7 +120,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <p className="mt-3"><Link className="font-extrabold text-[#2f6fe0]" href="/audit">Open the audit log</Link></p>
         <p className="mt-1"><Link className="font-extrabold text-[#2f6fe0]" href="/import">Import a CSV from the old prototype</Link></p>
       </section>
-      {isDemoMode() ? (
+      {owner ? (
+        <section className="space-y-3 rounded-[22px] bg-white p-4">
+          <h2 className="font-extrabold">File storage</h2>
+          <p className="text-sm text-[#8a8496]">Checks that receipt photos can be saved and read back. It does not show your keys.</p>
+          <form action={checkFileStorage}><Button type="submit" variant="secondary">Check file storage</Button></form>
+        </section>
+      ) : null}
+      {owner ? (
+        <form action={clearSampleData} className="rounded-[22px] bg-white p-4">
+          <h2 className="font-extrabold">Clear sample shop</h2>
+          <p className="mt-1 text-sm text-[#8a8496]">Removes only the built-in sample products, suppliers, purchase orders, and demo sales. A product already linked to Shopify is kept. Press the button once to see if any sample rows are there, then check the box and press it again to remove them.</p>
+          <label className="mt-3 flex items-center gap-2 text-sm font-bold">
+            <input type="checkbox" name="confirm" value="yes" /> Remove the sample rows
+          </label>
+          <Button className="mt-3" type="submit" variant="outline">Clear sample data</Button>
+        </form>
+      ) : null}
+      {shouldLoadDemo() ? (
         <form action={reloadDemo} className="rounded-[22px] bg-white p-4">
           <h2 className="font-extrabold">Reload the sample shop</h2>
           <p className="mt-1 text-sm text-[#8a8496]">This replaces the catalog, orders, and purchase orders with the demo data.</p>

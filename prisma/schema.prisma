@@ -38,6 +38,7 @@ model Location {
   channel           String
   shopifyLocationId String?          @unique
   isDefaultReceive  Boolean          @default(false)
+  demoSeed          Boolean          @default(false)
   stockLevels       StockLevel[]
   purchaseOrders    PurchaseOrder[]
   counts            InventoryCount[]
@@ -50,6 +51,7 @@ model Supplier {
   email          String          @default("")
   phone          String          @default("")
   notes          String          @default("")
+  demoSeed       Boolean         @default(false)
   createdAt      DateTime        @default(now())
   products       Product[]
   purchaseOrders PurchaseOrder[]
@@ -74,6 +76,7 @@ model Product {
   categoryCode     String    @default("")
   supplierId       String?
   supplier         Supplier? @relation(fields: [supplierId], references: [id])
+  demoSeed         Boolean   @default(false)
   variants         Variant[]
   photos           Photo[]
   createdAt        DateTime  @default(now())
@@ -145,6 +148,7 @@ model PurchaseOrder {
   locationId    String
   location      Location            @relation(fields: [locationId], references: [id])
   status        String              @default("draft")
+  demoSeed      Boolean             @default(false)
   invoiceNumber String              @default("")
   notes         String              @default("")
   orderedAt     DateTime?
@@ -448,6 +452,7 @@ model InventoryCountLine {
 model SaleOrder {
   id              String     @id @default(cuid())
   shopifyOrderId  String?    @unique
+  demoSeed        Boolean    @default(false)
   name            String
   channel         String
   locationName    String     @default("")

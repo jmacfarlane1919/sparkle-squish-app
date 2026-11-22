@@ -13,7 +13,7 @@ const items = [
   { href: "/accounting", label: "Books", icon: BookOpen },
 ];
 
-export function Shell({ demo, children }: { demo: boolean; children: React.ReactNode }) {
+export function Shell({ banner, children }: { banner: "demo" | "shopify" | null; children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <div className="min-h-screen pb-24">
@@ -39,9 +39,14 @@ export function Shell({ demo, children }: { demo: boolean; children: React.React
             </form>
           </span>
         </div>
-        {demo ? (
+        {banner === "demo" ? (
           <p className="border-t border-[#f6d5e3] bg-[#fff6fa] px-4 py-2 text-center text-xs font-bold text-[#8d4d68]">
             Demo shop. Shopify writes are off, and this catalog is sample data.
+          </p>
+        ) : null}
+        {banner === "shopify" ? (
+          <p className="border-t border-[#f6e7c8] bg-[#fff8ec] px-4 py-2 text-center text-xs font-bold text-[#8a5a12]">
+            Shopify not connected yet. Your real shop will show here after you add the token and import.
           </p>
         ) : null}
       </header>

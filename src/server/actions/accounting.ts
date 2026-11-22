@@ -5,7 +5,15 @@ import { accountBalance, parseStatementCsv, reconciliationDifference, statementM
 import { parseUsdToCents } from "@/lib/invoices/match";
 import { prisma } from "@/lib/db";
 import { accountMap, createExpense, markInvoicePaid, postDepreciation, postInvoiceBooks, postManual, postShopifyToBooks, saveCustomValues, setBooksLockedThrough, stampToDate } from "@/server/ledger";
-import { go } from "@/server/nav";
+import { friendlyError } from "@/lib/friendly-error";
+import { go, rethrowNavigation } from "@/server/nav";
+
+export type ActionState = { error: string } | null;
+
+function caught(error: unknown) {
+  rethrowNavigation(error);
+  return friendlyError(error);
+}
 import type { PostingLine } from "@/lib/accounting/post";
 
 function text(form: FormData, key: string) {
@@ -26,7 +34,7 @@ function moneyLines(form: FormData) {
   }));
 }
 
-export async function saveExpense(form: FormData) {
+export async function saveExpense(_prev: ActionState, form: FormData): Promise<ActionState> {
   try {
     const expense = await createExpense({
       date: text(form, "date"),
@@ -44,11 +52,11 @@ export async function saveExpense(form: FormData) {
     revalidatePath("/accounting");
     go(`/accounting/expenses/${expense.id}`, { notice: "Saved in the books." });
   } catch (error) {
-    go("/accounting/expenses/new", { error: error instanceof Error ? error.message : "Could not save that expense." });
+    return { error: caught(error) };
   }
 }
 
-export async function saveInvoiceBooks(form: FormData) {
+export async function saveInvoiceBooks(_prev: ActionState, form: FormData): Promise<ActionState> {
   const id = text(form, "invoiceId");
   try {
     const { byKey } = await accountMap();
@@ -70,7 +78,7 @@ export async function saveInvoiceBooks(form: FormData) {
     revalidatePath(`/invoices/${id}`);
     go(`/invoices/${id}`, { notice: "The bill is in the books." });
   } catch (error) {
-    go(`/invoices/${id}`, { error: error instanceof Error ? error.message : "Could not enter that bill." });
+    return { error: caught(error) };
   }
 }
 
@@ -80,7 +88,7 @@ export async function payInvoice(form: FormData) {
     await markInvoicePaid(id, text(form, "paymentAccountId"), text(form, "date"));
     go(`/invoices/${id}`, { notice: "Marked paid." });
   } catch (error) {
-    go(`/invoices/${id}`, { error: error instanceof Error ? error.message : "Could not mark it paid." });
+    go(`/invoices/${id}`, { error: caught(error) });
   }
 }
 
@@ -125,7 +133,7 @@ export async function saveManual(form: FormData) {
     await postManual({ date: text(form, "date"), memo: text(form, "memo"), lines });
     go("/accounting/journal", { notice: "Adjustment saved." });
   } catch (error) {
-    go("/accounting/journal", { error: error instanceof Error ? error.message : "Could not save that adjustment." });
+    go("/accounting/journal", { error: caught(error) });
   }
 }
 
@@ -139,7 +147,7 @@ export async function postShopifyAction() {
     const count = await postShopifyToBooks();
     go("/accounting", { notice: count ? `Posted ${count} days of Shopify sales.` : "Shopify sales were already in the books." });
   } catch (error) {
-    go("/accounting", { error: error instanceof Error ? error.message : "Could not post Shopify sales." });
+    go("/accounting", { error: caught(error) });
   }
 }
 
@@ -272,7 +280,7 @@ export async function statementToExpense(form: FormData) {
     }
     go(`/accounting/expenses/${expense.id}`, { notice: "Expense created from the statement. Change the category if supplies is wrong." });
   } catch (error) {
-    go(`/accounting/reconcile/${line.reconciliationId}`, { error: error instanceof Error ? error.message : "Could not create the expense." });
+    go(`/accounting/reconcile/${line.reconciliationId}`, { error: caught(error) });
   }
 }
 
@@ -282,7 +290,7 @@ export async function postAssetDepreciation(form: FormData) {
     await postDepreciation(id, Number(text(form, "months")) || 1, text(form, "date"));
     go(`/accounting/assets/${id}`, { notice: "Depreciation posted." });
   } catch (error) {
-    go(`/accounting/assets/${id}`, { error: error instanceof Error ? error.message : "Could not post depreciation." });
+    go(`/accounting/assets/${id}`, { error: caught(error) });
   }
 }
 

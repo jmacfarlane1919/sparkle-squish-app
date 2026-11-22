@@ -63,6 +63,28 @@ export async function readBytes(key: string) {
   }
 }
 
+export async function checkStorage(): Promise<{ ok: boolean; message: string }> {
+  if (!s3Configured()) return { ok: false, message: STORAGE_NOT_READY };
+  const key = `health/${Date.now()}-ok.txt`;
+  try {
+    await saveBytes(key, Buffer.from("ok"), "text/plain");
+    const back = await readBytes(key);
+    await deleteBytes(key);
+    if (!back || back.toString("utf8") !== "ok") {
+      return { ok: false, message: "The file uploaded, but it could not be read back. The R2 token needs permission to read and write." };
+    }
+    return { ok: true, message: "File storage is working." };
+  } catch (error) {
+    try {
+      await deleteBytes(key);
+    } catch {
+      // The health file may not have been written.
+    }
+    const { friendlyError } = await import("@/lib/friendly-error");
+    return { ok: false, message: friendlyError(error) };
+  }
+}
+
 export async function deleteBytes(key: string) {
   if (s3Configured()) {
     const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");

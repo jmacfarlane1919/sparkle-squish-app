@@ -2,7 +2,7 @@ import { FEATURES } from "@/lib/features";
 import { chicagoDateKey, chicagoDateTime, shiftDateKey } from "@/lib/format";
 import { LAST_ISSUED_BARCODE, ean13FromBody } from "@/lib/identifiers";
 import { enqueueReceipt } from "@/server/label-queue";
-import { shopifyConfigured } from "@/lib/env";
+import { shopifyConfigured, shouldLoadDemo } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { saveBytes } from "@/lib/storage";
 
@@ -459,6 +459,7 @@ export function ensureDemoSeed() {
 }
 
 async function seedIfEmpty() {
+  if (!shouldLoadDemo()) return;
   if (shopifyConfigured()) return;
   const categories = await prisma.category.count();
   if (categories > 0) return;
@@ -521,10 +522,10 @@ export async function seedDemo() {
   });
 
   const online = await prisma.location.create({
-    data: { name: "Sparkle & Squish online", channel: "online" },
+    data: { name: "Sparkle & Squish online", channel: "online", demoSeed: true },
   });
   const pos = await prisma.location.create({
-    data: { name: "The Squishy Shop", channel: "pos", isDefaultReceive: true },
+    data: { name: "The Squishy Shop", channel: "pos", isDefaultReceive: true, demoSeed: true },
   });
 
   const supplierRows = [
@@ -536,7 +537,7 @@ export async function seedDemo() {
   ] as const;
   const suppliers = new Map<string, string>();
   for (const [name, contactName, email, phone, notes] of supplierRows) {
-    const supplier = await prisma.supplier.create({ data: { name, contactName, email, phone, notes } });
+    const supplier = await prisma.supplier.create({ data: { name, contactName, email, phone, notes, demoSeed: true } });
     suppliers.set(name, supplier.id);
   }
 
@@ -557,6 +558,7 @@ export async function seedDemo() {
         newArrival: Boolean(item.newArrival),
         receivedAt: onHand > 0 ? chicagoDateTime("2026-11-01", 11) : null,
         categoryCode: item.category,
+        demoSeed: true,
         supplierId: suppliers.get(item.supplier),
       },
     });
@@ -627,6 +629,7 @@ export async function seedDemo() {
         supplierId: suppliers.get(input.supplier) || "",
         locationId: pos.id,
         status: input.status,
+        demoSeed: true,
         invoiceNumber: input.invoice,
         notes: input.notes,
         orderedAt: input.orderedDaysAgo == null ? null : chicagoDateTime(shiftDateKey(chicagoDateKey(new Date()), -input.orderedDaysAgo), 9),
@@ -774,6 +777,7 @@ export async function seedDemo() {
     return prisma.saleOrder.create({
       data: {
         shopifyOrderId: `demo-${orderNumber}`,
+        demoSeed: true,
         name: `#${orderNumber}`,
         channel,
         locationName: channel === "pos" ? "The Squishy Shop" : "Online",

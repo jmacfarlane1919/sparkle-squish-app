@@ -19,7 +19,8 @@ import { runShopifyOperation } from "@/lib/shopify/client";
 import { recordAudit } from "@/server/audit";
 import { executeFeature, featureEnabled } from "@/server/shopify-exec";
 import { enqueueNewProduct } from "@/server/label-queue";
-import { go } from "@/server/nav";
+import { friendlyError } from "@/lib/friendly-error";
+import { go, rethrowNavigation } from "@/server/nav";
 
 function requiredText(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -112,7 +113,8 @@ export async function createProduct(formData: FormData) {
   try {
     categoryCode = normalizeCategory(category);
   } catch (error) {
-    go("/products/new", { error: error instanceof Error ? error.message : "Pick a category." });
+    rethrowNavigation(error);
+    go("/products/new", { error: friendlyError(error) });
   }
   const variantCode = normalizeVariantCode(requiredText(formData, "variantCode") || "STD");
   const supplierId = requiredText(formData, "supplierId");
@@ -354,7 +356,8 @@ async function pushBrandedPhoto(photoId: string) {
     });
     return { mode: "live" as const, result: "Branded photo sent to Shopify." };
   } catch (error) {
-    const result = error instanceof Error ? error.message : "Photo upload failed.";
+    rethrowNavigation(error);
+    const result = friendlyError(error);
     await recordAudit({ feature: "product_photos", action: "Push branded photo", mode: "error", summary, result });
     return { mode: "error" as const, result };
   }

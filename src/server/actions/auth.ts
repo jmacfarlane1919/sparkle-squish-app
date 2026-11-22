@@ -2,7 +2,7 @@
 
 import { clearSessionCookie, setSessionCookie, signSession } from "@/lib/auth";
 import { passwordMatchesOwner, productionPasswordAllowed, resolveOwner, saveFirstOwner } from "@/lib/owner";
-import { go, safeNext } from "@/server/nav";
+import { go, rethrowNavigation, safeNext } from "@/server/nav";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") || "");
@@ -33,7 +33,8 @@ export async function setupOwner(formData: FormData) {
   if (password !== confirm) go("/login", { error: "Those passwords do not match." });
   try {
     await saveFirstOwner(email, password);
-  } catch {
+  } catch (error) {
+    rethrowNavigation(error);
     go("/login", { error: "An owner was just saved. Sign in with that email and password." });
   }
   await setSessionCookie(await signSession(email));

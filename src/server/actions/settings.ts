@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getAppUrl, isDemoMode } from "@/lib/env";
+import { getAppUrl, shouldLoadDemo } from "@/lib/env";
+import { getSession } from "@/lib/auth";
+import { isOwnerEmail } from "@/lib/owner";
 import { FEATURES, type FeatureKey } from "@/lib/features";
 import { normalizeCategory } from "@/lib/identifiers";
 import {
@@ -15,11 +17,14 @@ import {
 } from "@/lib/shopify/payloads";
 import { prisma } from "@/lib/db";
 import { exportBackup } from "@/server/backup";
+import { countDemoSeed, demoSeedMessage, removeDemoSeed } from "@/server/clear-demo";
+import { checkStorage } from "@/lib/storage";
 import { executeFeature } from "@/server/shopify-exec";
 import { importFromShopify, reconcile } from "@/server/shopify-sync";
 import { seedDemo } from "@/server/seed-demo";
 import { dateOnly } from "@/lib/labels/queue";
-import { go } from "@/server/nav";
+import { friendlyError } from "@/lib/friendly-error";
+import { go, rethrowNavigation } from "@/server/nav";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -149,7 +154,8 @@ export async function saveCategory(formData: FormData) {
   try {
     clean = normalizeCategory(code);
   } catch (error) {
-    go("/settings", { error: error instanceof Error ? error.message : "Check the category code." });
+    rethrowNavigation(error);
+    go("/settings", { error: friendlyError(error) });
   }
   if (!name) go("/settings", { error: "Give the category a name. CY, GM, and SP can stay as the code until you rename them." });
   const existing = await prisma.category.findUnique({ where: { code: clean } });
@@ -179,8 +185,33 @@ export async function runBackup() {
   go("/settings", { notice: `Backup saved as ${key}.` });
 }
 
+async function ownerOnly() {
+  const session = await getSession();
+  if (!session || !(await isOwnerEmail(session.email))) go("/settings", { error: "Only the owner can do that." });
+}
+
+export async function checkFileStorage() {
+  await ownerOnly();
+  const result = await checkStorage();
+  go("/settings", result.ok ? { notice: result.message } : { error: result.message });
+}
+
+export async function clearSampleData(formData: FormData) {
+  await ownerOnly();
+  const before = await countDemoSeed();
+  if (text(formData, "confirm") !== "yes") {
+    go("/settings", { notice: demoSeedMessage(before) });
+  }
+  if (before.products + before.suppliers + before.orders + before.purchaseOrders === 0) {
+    go("/settings", { notice: demoSeedMessage(before) });
+  }
+  await removeDemoSeed();
+  revalidatePath("/");
+  go("/settings", { notice: `Removed the sample shop. ${demoSeedMessage(before)} Real Shopify products were not touched.` });
+}
+
 export async function reloadDemo(formData: FormData) {
-  if (!isDemoMode()) go("/settings", { error: "Demo data is not loaded while a Shopify token is set." });
+  if (!shouldLoadDemo()) go("/settings", { error: "Sample data is only loaded on a local demo, or when DEMO_MODE is true." });
   if (text(formData, "confirm") !== "yes") go("/settings", { error: "Check the box to replace the catalog with the sample shop." });
   await seedDemo();
   revalidatePath("/");
