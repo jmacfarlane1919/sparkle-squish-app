@@ -7,7 +7,7 @@ import { go } from "@/server/nav";
 
 export async function commitInvoiceImport(formData: FormData) {
   const session = await getSession();
-  if (!session || !isOwnerEmail(session.email)) go("/invoices", { error: "Only the owner can import invoices." });
+  if (!session || !(await isOwnerEmail(session.email))) go("/invoices", { error: "Only the owner can import invoices." });
   const id = String(formData.get("draftId") || "");
   const draft = await readInvoiceDraft(id);
   if (!draft) go("/invoices/import", { error: "That review expired. Upload the CSV and zip again." });

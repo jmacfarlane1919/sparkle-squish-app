@@ -16,7 +16,7 @@ function day(date: Date) {
 export default async function InvoicesPage({ searchParams }: { searchParams: Promise<{ notice?: string; error?: string; q?: string }> }) {
   const params = await searchParams;
   const session = await getSession();
-  const owner = Boolean(session && isOwnerEmail(session.email));
+  const owner = Boolean(session && (await isOwnerEmail(session.email)));
   const q = (params.q || "").trim().toLowerCase();
   const invoices = await prisma.invoice.findMany({
     include: { purchaseOrder: true, attachments: true },

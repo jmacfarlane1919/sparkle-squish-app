@@ -9,4 +9,4 @@ if (next === source) {
 }
 writeFileSync(path, next);
 console.log("Prisma is now set to postgresql.");
-console.log("Set DATABASE_URL to your Postgres connection string, then run: npx prisma db push");
+console.log("Set DATABASE_URL to your Postgres connection string. Vercel applies prisma/migrations on deploy. Locally, run: npx prisma db push");

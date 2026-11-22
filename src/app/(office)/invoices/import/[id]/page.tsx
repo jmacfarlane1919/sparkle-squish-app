@@ -11,7 +11,7 @@ const selectClass = "mt-1 h-11 w-full rounded-2xl border border-[#e4dced] bg-whi
 
 export default async function InvoiceReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  if (!session || !isOwnerEmail(session.email)) notFound();
+  if (!session || !(await isOwnerEmail(session.email))) notFound();
   const { id } = await params;
   const draft = await readInvoiceDraft(id);
   if (!draft) notFound();

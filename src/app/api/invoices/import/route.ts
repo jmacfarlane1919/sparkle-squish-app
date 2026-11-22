@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const session = await getSession();
-  if (!session || !isOwnerEmail(session.email)) {
+  if (!session || !(await isOwnerEmail(session.email))) {
     return new Response("Only the owner can import invoices.", { status: 403 });
   }
   const form = await request.formData();

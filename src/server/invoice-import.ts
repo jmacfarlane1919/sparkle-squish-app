@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { unzipSync } from "fflate";
-import { getOwnerCredentials } from "@/lib/env";
 import {
   assignmentFor,
   contentTypeFor,
@@ -20,9 +19,7 @@ export type InvoiceDraft = InvoiceImportPlan & {
 
 const MANIFEST = (id: string) => `invoice-drafts/${id}/manifest.json`;
 
-export function isOwnerEmail(email: string) {
-  return email.trim().toLowerCase() === getOwnerCredentials().email.toLowerCase();
-}
+export { isOwnerEmail } from "@/lib/owner";
 
 function zipEntries(bytes: Uint8Array) {
   const opened = unzipSync(bytes);

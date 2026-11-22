@@ -141,29 +141,17 @@ A sensible order:
 5. Turn on **Receiving adds stock**, then **Receiving updates unit cost**.
 6. Turn on **Cycle count sets quantity** last. A count is skipped if the item sold, or was received, while the count was open.
 
-**Reconcile now** pulls stock, vendor identifiers, and orders back from Shopify. It does not overwrite your prices, costs, or S&S codes. A scheduled reconcile runs about every 15 minutes once the app is deployed (see below).
+**Reconcile now** pulls stock, vendor identifiers, and orders back from Shopify. It does not overwrite your prices, costs, or S&S codes. On the free Vercel plan that sync also runs once each morning. See [DEPLOY.md](DEPLOY.md).
 
 ## Put it on Vercel
 
-1. Create a Postgres database. Neon and Vercel Postgres both work. Copy the connection string.
-2. On your computer, in this folder, run `npm run use-postgres`. That changes one word in `prisma/schema.prisma` from `sqlite` to `postgresql`.
-3. In the Vercel project, set every variable from the table above. `DATABASE_URL` is the Postgres string. `APP_URL` is the Vercel address, such as `https://ss-software.vercel.app`.
-4. Set the build command to:
+Follow [DEPLOY.md](DEPLOY.md). That is the checklist for tonight: GitHub, Neon or Vercel Postgres, Cloudflare R2, the Shopify custom app, and the environment variables.
 
-```bash
-npx prisma generate && npx prisma db push && next build
-```
+The Vercel build applies `prisma/migrations` to Postgres. It does not load the sample catalog. Shopify writes stay off until you turn each switch on in Settings.
 
-5. Deploy. The file `vercel.json` already schedules:
+On the free Vercel plan the scheduled jobs run once a day: a Shopify sync around 7am Chicago, and a backup around 2am Chicago. Use **Reconcile now** in Settings when you want a sync sooner. A paid Vercel plan can run the sync every 15 minutes.
 
-- Reconcile: every 15 minutes (`/api/cron/reconcile`)
-- Backup: 2:00am Chicago time, which is 08:00 UTC (`/api/cron/backup`)
-
-Vercel’s Hobby plan only runs a cron once a day. The 15-minute reconcile needs a plan that allows that schedule. Until then, use **Reconcile now** in Settings. Set `CRON_SECRET` either way. Vercel sends it as `Authorization: Bearer …`.
-
-6. Open the deployed site, sign in, and press **Import from Shopify**. Do not load the sample catalog on the live database.
-
-The nightly backup is a JSON file of products, suppliers, purchase orders, counts, and sales. It does not include the Shopify token. On Vercel it is stored in the S3 bucket when those variables are set.
+The nightly backup is a JSON file of products, suppliers, purchase orders, counts, and sales. It does not include the Shopify token. On Vercel it is stored in the R2 bucket.
 
 ## Bring over the old prototype
 

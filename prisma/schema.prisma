@@ -1,10 +1,11 @@
 // S&S Software
-// Local demo uses SQLite. Before deploying, change provider to "postgresql"
-// (npm run use-postgres) and point DATABASE_URL at your hosted Postgres.
+// The copy in git stays on SQLite so the demo runs on your computer.
+// The Vercel build switches this file to PostgreSQL and runs prisma/migrations.
 // The models below stay the same on both.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

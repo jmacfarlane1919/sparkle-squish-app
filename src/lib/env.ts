@@ -22,9 +22,10 @@ export function isDemoMode() {
 }
 
 export function getSessionSecret() {
-  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  const secret = process.env.SESSION_SECRET || "";
+  if (secret.length >= 24) return secret;
   if (process.env.NODE_ENV === "production") {
-    throw new Error("SESSION_SECRET is required in production");
+    throw new Error("SESSION_SECRET must be a random string of at least 24 characters in production.");
   }
   return "dev-only-ss-software-session-secret";
 }

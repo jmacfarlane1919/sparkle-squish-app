@@ -8,7 +8,7 @@ export const metadata = { title: "Import invoices" };
 export default async function ImportInvoicesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const params = await searchParams;
   const session = await getSession();
-  const owner = Boolean(session && isOwnerEmail(session.email));
+  const owner = Boolean(session && (await isOwnerEmail(session.email)));
 
   return (
     <div className="mx-auto max-w-xl">

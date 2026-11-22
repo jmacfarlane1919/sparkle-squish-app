@@ -3,16 +3,23 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PREFIXES = ["/login", "/api/webhooks", "/api/cron"];
 
+function sessionSecret() {
+  const secret = process.env.SESSION_SECRET || "";
+  if (secret.length >= 24) return secret;
+  if (process.env.NODE_ENV === "production") return "";
+  return "dev-only-ss-software-session-secret";
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (PUBLIC_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
   const token = request.cookies.get("ss_session")?.value;
-  const secret = new TextEncoder().encode(process.env.SESSION_SECRET || "dev-only-ss-software-session-secret");
-  if (token) {
+  const secret = sessionSecret();
+  if (token && secret) {
     try {
-      await jwtVerify(token, secret);
+      await jwtVerify(token, new TextEncoder().encode(secret));
       if (pathname.startsWith("/login")) {
         return NextResponse.redirect(new URL("/", request.url));
       }
