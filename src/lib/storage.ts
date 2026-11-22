@@ -20,7 +20,15 @@ async function s3() {
   return { client, PutObjectCommand, GetObjectCommand, bucket: process.env.S3_BUCKET || "" };
 }
 
+export function canStoreFiles() {
+  if (s3Configured()) return true;
+  return process.env.NODE_ENV !== "production";
+}
+
+export const STORAGE_NOT_READY = "File storage is not set up yet. Add the Cloudflare R2 settings in Vercel, then try the upload again. Nothing was saved.";
+
 export async function saveBytes(key: string, bytes: Buffer, contentType: string) {
+  if (!canStoreFiles()) throw new Error(STORAGE_NOT_READY);
   if (s3Configured()) {
     const { client, PutObjectCommand, bucket } = await s3();
     await client.send(

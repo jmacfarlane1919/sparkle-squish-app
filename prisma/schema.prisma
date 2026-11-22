@@ -54,6 +54,7 @@ model Supplier {
   products       Product[]
   purchaseOrders PurchaseOrder[]
   invoices       Invoice[]
+  expenses       Expense[]
 }
 
 model Product {
@@ -172,7 +173,15 @@ model Invoice {
   taxCents        Int?
   purchaseOrderId String?
   purchaseOrder   PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  whereName       String              @default("")
+  whereUrl        String              @default("")
+  whereAddress    String              @default("")
+  paymentAccountId String?
+  paymentAccount  Account?            @relation("InvoicePayment", fields: [paymentAccountId], references: [id])
+  billEntryId     String?             @unique
+  paymentEntryId  String?             @unique
   attachments     InvoiceAttachment[]
+  lines           InvoiceLine[]
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -191,6 +200,183 @@ model InvoiceAttachment {
   createdAt   DateTime @default(now())
 
   @@unique([invoiceId, filename])
+}
+
+model Account {
+  id             String           @id @default(cuid())
+  code           String           @unique
+  name           String
+  type           String
+  contra         Boolean          @default(false)
+  active         Boolean          @default(true)
+  parentId       String?
+  parent         Account?         @relation("AccountParent", fields: [parentId], references: [id])
+  children       Account[]        @relation("AccountParent")
+  systemKey      String?          @unique
+  createdAt      DateTime         @default(now())
+  journalLines   JournalLine[]
+  expensePayments Expense[]       @relation("ExpensePayment")
+  expenseLines   ExpenseLine[]
+  invoicePayments Invoice[]       @relation("InvoicePayment")
+  invoiceLines   InvoiceLine[]
+  assets         Asset[]
+  reconciliations Reconciliation[]
+}
+
+model JournalEntry {
+  id        String        @id @default(cuid())
+  entryDate DateTime
+  memo      String        @default("")
+  source    String
+  sourceKey String        @unique
+  createdAt DateTime      @default(now())
+  lines     JournalLine[]
+
+  @@index([entryDate])
+}
+
+model JournalLine {
+  id          String       @id @default(cuid())
+  entryId     String
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account      @relation(fields: [accountId], references: [id])
+  debitCents  Int          @default(0)
+  creditCents Int          @default(0)
+  memo        String       @default("")
+
+  @@index([accountId])
+}
+
+model Expense {
+  id               String        @id @default(cuid())
+  expenseDate      DateTime
+  vendorName       String
+  supplierId       String?
+  supplier         Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  paymentAccountId String
+  paymentAccount   Account       @relation("ExpensePayment", fields: [paymentAccountId], references: [id])
+  whereName        String        @default("")
+  whereUrl         String        @default("")
+  whereAddress     String        @default("")
+  memo             String        @default("")
+  totalCents       Int
+  journalEntryId   String?       @unique
+  createdAt        DateTime      @default(now())
+  lines            ExpenseLine[]
+  files            AccountingFile[]
+
+  @@index([expenseDate])
+}
+
+model ExpenseLine {
+  id          String   @id @default(cuid())
+  expenseId   String
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account  @relation(fields: [accountId], references: [id])
+  amountCents Int
+  memo        String   @default("")
+  isAsset     Boolean  @default(false)
+  asset       Asset?
+}
+
+model InvoiceLine {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account @relation(fields: [accountId], references: [id])
+  amountCents Int
+  memo        String  @default("")
+  isAsset     Boolean @default(false)
+  asset       Asset?
+}
+
+model Asset {
+  id                String   @id @default(cuid())
+  name              String
+  purchaseDate      DateTime
+  costCents         Int
+  usefulLifeMonths  Int?
+  depreciate        Boolean  @default(false)
+  accountId         String
+  account           Account  @relation(fields: [accountId], references: [id])
+  expenseLineId     String?  @unique
+  expenseLine       ExpenseLine? @relation(fields: [expenseLineId], references: [id])
+  invoiceLineId     String?  @unique
+  invoiceLine       InvoiceLine? @relation(fields: [invoiceLineId], references: [id])
+  whereName         String   @default("")
+  whereUrl          String   @default("")
+  whereAddress      String   @default("")
+  depreciatedCents  Int      @default(0)
+  createdAt         DateTime @default(now())
+  files             AccountingFile[]
+}
+
+model AccountingFile {
+  id          String   @id @default(cuid())
+  kind        String
+  expenseId   String?
+  expense     Expense? @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  filename    String
+  storageKey  String
+  contentType String
+  createdAt   DateTime @default(now())
+}
+
+model Reconciliation {
+  id                 String        @id @default(cuid())
+  accountId          String
+  account            Account       @relation(fields: [accountId], references: [id])
+  statementDate      DateTime
+  endingBalanceCents Int
+  finishedAt         DateTime?
+  createdAt          DateTime      @default(now())
+  marks              ReconciliationMark[]
+  statementLines     StatementLine[]
+}
+
+model ReconciliationMark {
+  id               String         @id @default(cuid())
+  reconciliationId String
+  reconciliation   Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  journalLineId    String
+  @@unique([reconciliationId, journalLineId])
+}
+
+model StatementLine {
+  id               String         @id @default(cuid())
+  reconciliationId String
+  reconciliation   Reconciliation @relation(fields: [reconciliationId], references: [id], onDelete: Cascade)
+  lineDate         DateTime
+  description      String         @default("")
+  amountCents      Int
+  journalLineId    String?
+}
+
+model CustomField {
+  id        String             @id @default(cuid())
+  entity    String
+  label     String
+  fieldType String
+  options   String             @default("")
+  hidden    Boolean            @default(false)
+  sortOrder Int                @default(0)
+  createdAt DateTime           @default(now())
+  values    CustomFieldValue[]
+}
+
+model CustomFieldValue {
+  id      String      @id @default(cuid())
+  fieldId String
+  field   CustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  recordId String
+  value   String      @default("")
+
+  @@unique([fieldId, recordId])
 }
 
 model PurchaseOrderLine {

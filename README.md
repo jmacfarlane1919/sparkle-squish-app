@@ -177,6 +177,7 @@ The tests cover:
 
 ## Day to day
 
+- **Books** is the simple ledger: expenses, supplier bills, profit, what you own, and bank reconciliation. Equipment can be marked on a line so it is not treated as an expense. Depreciation stays off until you turn it on.
 - **Home** is today’s sales, cost, and margin, split between online and The Squishy Shop.
 - **Inventory** is the card desk: products, receiving, counts, lookup, suppliers, and labels.
 - **Scan** looks up whatever you scan.

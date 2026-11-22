@@ -5,7 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format";
+import { CustomFields } from "@/components/custom-fields";
+import { saveSupplierFields } from "@/server/actions/accounting";
 import { updateSupplier } from "@/server/actions/purchasing";
+import { customValues } from "@/server/ledger";
 import { notFound } from "next/navigation";
 
 export default async function SupplierPage({
@@ -26,6 +29,7 @@ export default async function SupplierPage({
     },
   });
   if (!supplier) notFound();
+  const fields = await customValues("supplier", supplier.id);
   return (
     <div className="mx-auto max-w-xl">
       <BackLink href="/suppliers">Suppliers</BackLink>
@@ -39,6 +43,12 @@ export default async function SupplierPage({
         <Field label="Phone"><Input name="phone" defaultValue={supplier.phone} /></Field>
         <Field label="Notes"><Textarea name="notes" defaultValue={supplier.notes} /></Field>
         <Button type="submit">Save</Button>
+      </form>
+      <form action={saveSupplierFields} className="mt-4 space-y-3 rounded-[22px] bg-white p-4">
+        <h2 className="font-extrabold">Extra details</h2>
+        <input type="hidden" name="supplierId" value={supplier.id} />
+        <CustomFields fields={fields} />
+        {fields.length === 0 ? <p className="text-sm text-[#8a8496]">Add questions under Books → Extra fields.</p> : <Button type="submit" variant="secondary">Save extra details</Button>}
       </form>
       <h2 className="mb-2 mt-6 text-sm font-extrabold text-[#8a8496]">Purchase orders</h2>
       <div className="space-y-2">
