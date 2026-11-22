@@ -20,9 +20,8 @@ export async function POST(request: Request) {
   const webhookId = request.headers.get("x-shopify-webhook-id") || "";
   try {
     await handleWebhook(topic, body, webhookId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Webhook failed";
-    return new Response(message, { status: 500 });
+  } catch {
+    return new Response("Webhook failed", { status: 500 });
   }
   return new Response("ok");
 }
