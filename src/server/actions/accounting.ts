@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { accountBalance, parseStatementCsv, reconciliationDifference } from "@/lib/accounting/reconcile";
+import { accountBalance, parseStatementCsv, reconciliationDifference, statementMatchesBook } from "@/lib/accounting/reconcile";
 import { parseUsdToCents } from "@/lib/invoices/match";
 import { prisma } from "@/lib/db";
 import { accountMap, createExpense, markInvoicePaid, postDepreciation, postInvoiceBooks, postManual, postShopifyToBooks, saveCustomValues, setBooksLockedThrough, stampToDate } from "@/server/ledger";
@@ -209,7 +209,40 @@ export async function importStatement(form: FormData) {
   await prisma.statementLine.createMany({
     data: rows.map((row) => ({ reconciliationId: id, lineDate: stampToDate(row.date), description: row.description, amountCents: row.amountCents })),
   });
-  go(`/accounting/reconcile/${id}`, { notice: `Added ${rows.length} statement lines.` });
+  const matched = await autoMatchStatement(id);
+  go(`/accounting/reconcile/${id}`, { notice: `Added ${rows.length} statement lines. ${matched} matched a book entry by date and amount.` });
+}
+
+async function autoMatchStatement(id: string) {
+  const rec = await prisma.reconciliation.findUnique({
+    where: { id },
+    include: { account: true, statementLines: true, marks: true },
+  });
+  if (!rec) return 0;
+  const used = new Set(rec.marks.map((mark) => mark.journalLineId));
+  const lines = await prisma.journalLine.findMany({
+    where: { accountId: rec.accountId, entry: { entryDate: { lte: rec.statementDate } } },
+    include: { entry: true },
+  });
+  let matched = 0;
+  for (const statement of rec.statementLines) {
+    if (statement.journalLineId) continue;
+    const hit = lines.find((line) => {
+      if (used.has(line.id)) return false;
+      return statementMatchesBook(rec.account.type === "liability" ? "liability" : "asset", statement.lineDate.toISOString().slice(0, 10), statement.amountCents, {
+        id: line.id,
+        entryDate: line.entry.entryDate.toISOString().slice(0, 10),
+        debitCents: line.debitCents,
+        creditCents: line.creditCents,
+      });
+    });
+    if (!hit) continue;
+    used.add(hit.id);
+    matched += 1;
+    await prisma.statementLine.update({ where: { id: statement.id }, data: { journalLineId: hit.id } });
+    await prisma.reconciliationMark.create({ data: { reconciliationId: id, journalLineId: hit.id } });
+  }
+  return matched;
 }
 
 export async function statementToExpense(form: FormData) {

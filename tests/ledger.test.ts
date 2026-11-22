@@ -10,7 +10,7 @@ import {
   shopifyDayPosting,
 } from "@/lib/accounting/post";
 import { balanceSheet, profitAndLoss, trialBalance, type LedgerAccount, type LedgerMovement } from "@/lib/accounting/reports";
-import { accountBalance, parseStatementCsv, reconciliationDifference } from "@/lib/accounting/reconcile";
+import { accountBalance, parseStatementCsv, reconciliationDifference, statementMatchesBook } from "@/lib/accounting/reconcile";
 
 const accounts: LedgerAccount[] = [
   { id: "cash", code: "1000", name: "Checking", type: "asset", contra: false },
@@ -73,6 +73,8 @@ describe("ledger", () => {
     expect(cleared).toBe(7500);
     expect(reconciliationDifference(7500, cleared)).toBe(0);
     expect(reconciliationDifference(8000, cleared)).toBe(500);
+    expect(statementMatchesBook("asset", "2026-11-02", -2500, { id: "1", entryDate: "2026-11-02", debitCents: 0, creditCents: 2500 })).toBe(true);
+    expect(statementMatchesBook("asset", "2026-11-03", -2500, { id: "1", entryDate: "2026-11-02", debitCents: 0, creditCents: 2500 })).toBe(false);
     expect(accountBalance("liability", [{ debitCents: 0, creditCents: 4000 }])).toBe(4000);
   });
 

@@ -19,6 +19,11 @@ export function reconciliationDifference(statementEndingCents: number, clearedBa
   return statementEndingCents - clearedBalanceCents;
 }
 
+export function statementMatchesBook(accountType: "asset" | "liability", statementDate: string, statementAmountCents: number, line: ClearableLine) {
+  const signed = accountType === "liability" ? line.creditCents - line.debitCents : line.debitCents - line.creditCents;
+  return line.entryDate === statementDate && signed === statementAmountCents;
+}
+
 export function parseStatementCsv(text: string) {
   return rowsToRecords(text).flatMap(({ record }) => {
     const date = parseInvoiceDate(record.date || record.posted_date || record.transaction_date || "");

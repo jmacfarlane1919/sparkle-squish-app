@@ -66,22 +66,27 @@ function Profit({ accounts, lines, from, to, months, compare }: { accounts: Awai
   return (
     <section className="space-y-3 rounded-[22px] bg-white p-4">
       <h2 className="font-extrabold">Profit from {from} to {to}</h2>
-      <Group title="Money in" rows={report.income} total={report.incomeCents} />
-      <Group title="Cost of product sold" rows={report.cogs} total={report.cogsCents} />
+      <Group title="Money in" rows={report.income} total={report.incomeCents} months={report.months} />
+      <Group title="Cost of product sold" rows={report.cogs} total={report.cogsCents} months={report.months} />
       <p className="flex justify-between text-sm font-extrabold"><span>Left after product cost</span><span>{money(report.grossCents)}</span></p>
-      <Group title="Other costs" rows={report.expenses} total={report.expenseCents} />
+      <Group title="Other costs" rows={report.expenses} total={report.expenseCents} months={report.months} />
       <p className="flex justify-between border-t border-[#f0ebf6] pt-2 text-base font-extrabold"><span>Profit</span><span>{money(report.netCents)}</span></p>
       {compare && report.prior ? <p className="text-sm text-[#8a8496]">Prior period {report.prior.from} to {report.prior.to}: {money(report.priorNetCents || 0)}</p> : null}
-      {months && report.months.length ? <p className="text-xs text-[#8a8496]">Months: {report.months.join(", ")}. Line amounts above are the whole range.</p> : null}
+      {months && report.months.length ? <p className="text-xs text-[#8a8496]">Month columns use {report.months.join(", ")}.</p> : null}
     </section>
   );
 }
 
-function Group({ title, rows, total }: { title: string; rows: { id: string; code: string; name: string; amountCents: number }[]; total: number }) {
+function Group({ title, rows, total, months = [] }: { title: string; rows: { id: string; code: string; name: string; amountCents: number; months?: number[] }[]; total: number; months?: string[] }) {
   return (
     <div>
       <h3 className="text-sm font-extrabold text-[#8a8496]">{title}</h3>
-      {rows.map((row) => <p key={row.id} className="flex justify-between text-sm"><span>{row.code} {row.name}</span><span>{money(row.amountCents)}</span></p>)}
+      {rows.map((row) => (
+        <div key={row.id} className="text-sm">
+          <p className="flex justify-between"><span>{row.code} {row.name}</span><span>{money(row.amountCents)}</span></p>
+          {months.length && row.months ? <p className="text-xs text-[#8a8496]">{months.map((month, index) => `${month} ${money(row.months?.[index] || 0)}`).join(" · ")}</p> : null}
+        </div>
+      ))}
       <p className="flex justify-between text-sm font-extrabold"><span>Total</span><span>{money(total)}</span></p>
     </div>
   );
