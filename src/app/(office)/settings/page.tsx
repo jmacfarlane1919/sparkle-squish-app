@@ -9,8 +9,10 @@ import { isOwnerEmail } from "@/lib/owner";
 import { FEATURES } from "@/lib/features";
 import { NEXT_FREE_BARCODE, allocateBarcode } from "@/lib/identifiers";
 import { DEFAULT_LABELS_PRINTED_THROUGH } from "@/lib/labels/queue";
-import { checkFileStorage, clearSampleData, previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature, toggleNiimbotBluetooth } from "@/server/actions/settings";
+import { ShopifyImport } from "@/components/shopify-import";
+import { checkFileStorage, clearSampleData, previewFeature, reloadDemo, runBackup, runReconcile, saveCategory, saveLabelCutoff, toggleFeature, toggleNiimbotBluetooth } from "@/server/actions/settings";
 import { describeShopifyConnection } from "@/server/shopify-token";
+import { importStatus } from "@/server/shopify-sync";
 
 export const metadata = { title: "Settings" };
 
@@ -30,6 +32,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   ]);
   const nextBarcode = counter ? allocateBarcode(counter.lastIssued, barcodes.map((row) => row.ssBarcode).filter(Boolean)) : NEXT_FREE_BARCODE;
   const shopify = await describeShopifyConnection();
+  const importing = await importStatus();
   const byKey = new Map(flags.map((flag) => [flag.key, flag.enabled]));
 
   return (
@@ -44,10 +47,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {shopify.detail ? <p className="text-[#8a8496]"><Shown value={shopify.detail} /></p> : null}
         <p className="text-[#8a8496]">App URL for webhooks: <Shown value={getAppUrl()} setting="APP_URL" />/api/webhooks/shopify</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <form action={runImport}><Button type="submit" variant="secondary">Import from Shopify</Button></form>
           <form action={runReconcile}><Button type="submit" variant="outline">Reconcile now</Button></form>
           <form action={runBackup}><Button type="submit" variant="outline">Back up now</Button></form>
         </div>
+        <ShopifyImport initial={importing} />
         {lastBackup ? <p className="mt-2 text-xs text-[#8a8496]">Last backup: <Shown value={lastBackup.value} /></p> : null}
       </section>
       <section className="rounded-[22px] bg-white p-4">

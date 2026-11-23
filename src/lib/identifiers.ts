@@ -117,6 +117,48 @@ export function laterBarcode(left: string, right: string) {
   return BigInt(left.slice(0, 12)) >= BigInt(right.slice(0, 12)) ? left : right;
 }
 
+function maxSeriesBarcode(codes: Iterable<string>) {
+  let best: string | null = null;
+  for (const code of codes) {
+    if (!isValidEan13(code) || !code.startsWith("2")) continue;
+    best = best ? laterBarcode(best, code) : code;
+  }
+  return best;
+}
+
+export function seriesMarkAfterImport(input: {
+  current: string | null;
+  shopifyBarcodes: Iterable<string>;
+  appIssuedBarcodes: Iterable<string>;
+}) {
+  const shopifyMax = maxSeriesBarcode(input.shopifyBarcodes);
+  const appMax = maxSeriesBarcode(input.appIssuedBarcodes);
+  const highest = [shopifyMax, appMax].filter((code): code is string => Boolean(code)).reduce<string | null>((best, code) => (best ? laterBarcode(best, code) : code), null);
+  if (!highest) {
+    return {
+      lastIssued: input.current,
+      lowered: false,
+      note: "No S&S barcodes were found on Shopify, so the series was left as it is.",
+    };
+  }
+  const currentAhead = Boolean(input.current && isValidEan13(input.current) && BigInt(input.current.slice(0, 12)) > BigInt(highest.slice(0, 12)));
+  if (!currentAhead) {
+    return { lastIssued: highest, lowered: false, note: `Last issued is ${highest}, the highest S&S barcode found.` };
+  }
+  if (appMax) {
+    return {
+      lastIssued: input.current,
+      lowered: false,
+      note: `Last issued stays ${input.current} because this app already handed out a later barcode.`,
+    };
+  }
+  return {
+    lastIssued: highest,
+    lowered: true,
+    note: `Last issued moved back from ${input.current} to ${highest}, the highest S&S barcode on Shopify. No barcodes had been issued from this app.`,
+  };
+}
+
 export function barcodeValues(variant: { ssBarcode?: string; vendorBarcode?: string; otherBarcodes?: string }) {
   const extras = (variant.otherBarcodes || "")
     .split(",")

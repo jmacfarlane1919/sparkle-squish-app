@@ -1,10 +1,20 @@
 import { dollarsToCents } from "@/lib/format";
-import { laterBarcode, parseSsSku } from "@/lib/identifiers";
+import { laterBarcode, parseSsSku, seriesMarkAfterImport } from "@/lib/identifiers";
+import { isDemoProduct } from "@/lib/demo-fingerprint";
 import { shopifyConfigured } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { shopifyGraphql } from "@/lib/shopify/client";
 import { enqueueImport } from "@/server/label-queue";
-import { LOCATIONS_QUERY, ORDERS_QUERY, PRODUCTS_QUERY } from "@/lib/shopify/queries";
+import {
+  INVENTORY_QUERY,
+  LOCATIONS_QUERY,
+  ORDERS_COUNT_QUERY,
+  ORDER_LINES_QUERY,
+  ORDERS_QUERY,
+  PRODUCTS_COUNT_QUERY,
+  PRODUCT_SHELLS_QUERY,
+  VARIANTS_QUERY,
+} from "@/lib/shopify/queries";
 
 type MetafieldValue = { value?: string | null } | null;
 
@@ -212,6 +222,24 @@ async function upsertRemoteProduct(product: RemoteProduct) {
     return "created";
   }
 
+  await prisma.product.update({
+    where: { id: existing.id },
+    data: {
+      title: product.title,
+      description: product.description || "",
+      status: status === "active" || status === "draft" || status === "archived" ? status : existing.status,
+      brand: meta(product.brand) || product.vendor || existing.brand,
+      texture: meta(product.texture) || existing.texture,
+      season: meta(product.season) || existing.season,
+      size: meta(product.size) || existing.size,
+      material: meta(product.material) || existing.material,
+      ageGuidance: meta(product.ageGuidance) || existing.ageGuidance,
+      newArrival: meta(product.newArrival) === "true" || existing.newArrival,
+      receivedAt: meta(product.receivedAt) ? new Date(`${meta(product.receivedAt)}T12:00:00Z`) : existing.receivedAt,
+      categoryCode: existing.categoryCode || parseSsSku(meta(product.variants.nodes[0]?.ssSku))?.category || "",
+    },
+  });
+
   for (const [index, remote] of product.variants.nodes.entries()) {
     const local = existing.variants.find((variant) => variant.shopifyVariantId === remote.id);
     const codes = vendorBarcodes(remote);
@@ -361,7 +389,7 @@ function graphqlOrder(node: {
   displayFinancialStatus?: string | null;
   cancelledAt?: string | null;
   retailLocation?: { name?: string | null } | null;
-  lineItems: { nodes: { id: string; title: string; sku?: string | null; quantity: number; originalUnitPriceSet?: { shopMoney?: { amount?: string } }; variant?: { id?: string | null } | null }[] };
+  lineItems: { pageInfo?: { hasNextPage: boolean; endCursor: string | null }; nodes: { id: string; title: string; sku?: string | null; quantity: number; originalUnitPriceSet?: { shopMoney?: { amount?: string } }; variant?: { id?: string | null } | null }[] };
   refunds: { id: string; createdAt: string; refundLineItems: { nodes: { quantity: number; subtotalSet?: { shopMoney?: { amount?: string } }; lineItem?: { id?: string; title?: string; sku?: string | null; variant?: { id?: string | null } | null } | null }[] } }[];
 }): IncomingOrder {
   return {
@@ -394,98 +422,250 @@ function graphqlOrder(node: {
   };
 }
 
-export async function importFromShopify() {
-  if (!shopifyConfigured()) {
-    return { status: "skipped", detail: "Add the Shopify admin token before importing the live catalog." };
+const JOB_KEY = "shopify_import_job";
+
+type ImportJob = {
+  phase: "locations" | "products" | "orders" | "finish" | "done";
+  locationCursor: string | null;
+  productCursor: string | null;
+  productPagesDone: boolean;
+  pendingProductIds: string[];
+  activeProductId: string | null;
+  variantCursor: string | null;
+  productsDone: number;
+  productsTotal: number | null;
+  orderCursor: string | null;
+  ordersDone: number;
+  ordersTotal: number | null;
+  search: string | null;
+  note: string;
+};
+
+export function describeImportProgress(job: Pick<ImportJob, "phase" | "productsDone" | "productsTotal" | "ordersDone" | "ordersTotal" | "note">) {
+  if (job.phase === "done") return job.note || `Import finished. ${job.productsDone} products are in S&S Software.`;
+  const products = job.productsTotal == null ? `Imported ${job.productsDone} products` : `Imported ${job.productsDone} of ${job.productsTotal} products`;
+  if (job.phase === "orders") {
+    const orders = job.ordersTotal == null ? `${job.ordersDone} orders` : `${job.ordersDone} of ${job.ordersTotal} orders`;
+    return `${products}. Reading orders, ${orders}...`;
   }
-  const run = await prisma.syncRun.create({ data: { kind: "shopify_import", status: "running", detail: "Starting import" } });
+  if (job.phase === "locations") return "Reading shop locations...";
+  if (job.phase === "finish") return `${products}. Updating the barcode series...`;
+  return `${products}...`;
+}
+
+function blankJob(search: string | null): ImportJob {
+  return {
+    phase: "locations",
+    locationCursor: null,
+    productCursor: null,
+    productPagesDone: false,
+    pendingProductIds: [],
+    activeProductId: null,
+    variantCursor: null,
+    productsDone: 0,
+    productsTotal: null,
+    orderCursor: null,
+    ordersDone: 0,
+    ordersTotal: null,
+    search,
+    note: "",
+  };
+}
+
+async function loadJob() {
+  const raw = await setting(JOB_KEY);
+  if (!raw) return null;
   try {
-    await importLocations();
-    const products = await importProductPages(null, null);
-    const orders = await importOrderPages(null, null);
-    const detail = `Imported ${products} product pages and ${orders} order pages from Shopify.`;
-    await prisma.syncRun.update({ where: { id: run.id }, data: { status: "ok", detail, finishedAt: new Date() } });
-    return { status: "ok", detail };
+    return JSON.parse(raw) as ImportJob;
+  } catch {
+    return null;
+  }
+}
+
+async function saveJob(job: ImportJob) {
+  await putSetting(JOB_KEY, JSON.stringify(job));
+}
+
+type Read = <T>(query: string, variables?: Record<string, unknown>) => Promise<T>;
+
+async function countOf(read: Read, query: string, search: string | null) {
+  try {
+    const data = await read<{ productsCount?: { count: number }; ordersCount?: { count: number } }>(query, { search });
+    return data.productsCount?.count ?? data.ordersCount?.count ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function importVariantPage(read: Read, productId: string, cursor: string | null) {
+  const data = await read<{
+    product: { variants: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: RemoteVariant[] } } | null;
+  }>(VARIANTS_QUERY, { id: productId, cursor });
+  const page = data.product?.variants;
+  if (!page) return { done: true as const };
+  const local = await prisma.product.findUnique({ where: { shopifyProductId: productId } });
+  if (local) {
+    await upsertRemoteProduct({
+      id: productId,
+      title: local.title,
+      description: local.description,
+      status: local.status,
+      variants: { nodes: page.nodes },
+    });
+  }
+  const ids = page.nodes.map((variant) => variant.inventoryItem?.id).filter((id): id is string => Boolean(id));
+  for (let start = 0; start < ids.length; start += 8) {
+    const stock = await read<{ nodes: ({ id: string; inventoryLevels?: { nodes: RemoteLevel[] } } | null)[] }>(INVENTORY_QUERY, { ids: ids.slice(start, start + 8) });
+    for (const item of stock.nodes) {
+      if (!item?.id || !item.inventoryLevels?.nodes) continue;
+      const variant = await prisma.variant.findFirst({ where: { shopifyInventoryItemId: item.id } });
+      if (variant) await applyStock(variant.id, item.inventoryLevels.nodes);
+    }
+  }
+  return page.pageInfo.hasNextPage ? { done: false as const, cursor: page.pageInfo.endCursor } : { done: true as const };
+}
+
+async function finishBarcodeSeries() {
+  const products = await prisma.product.findMany({ include: { variants: true } });
+  const shopifyBarcodes: string[] = [];
+  const appIssued: string[] = [];
+  for (const product of products) {
+    const demo = product.demoSeed || isDemoProduct({
+      title: product.title,
+      shopifyProductId: product.shopifyProductId,
+      demoSeed: product.demoSeed,
+      skus: product.variants.map((variant) => variant.ssSku),
+      shopifyVariantIds: product.variants.map((variant) => variant.shopifyVariantId),
+    });
+    for (const variant of product.variants) {
+      if (!variant.ssBarcode) continue;
+      if (variant.shopifyVariantId) shopifyBarcodes.push(variant.ssBarcode);
+      else if (!demo) appIssued.push(variant.ssBarcode);
+    }
+  }
+  const current = await prisma.barcodeCounter.findUnique({ where: { id: "series" } });
+  const mark = seriesMarkAfterImport({ current: current?.lastIssued || null, shopifyBarcodes, appIssuedBarcodes: appIssued });
+  if (mark.lastIssued) {
+    await prisma.barcodeCounter.upsert({
+      where: { id: "series" },
+      update: { lastIssued: mark.lastIssued },
+      create: { id: "series", lastIssued: mark.lastIssued },
+    });
+  }
+  return mark.note;
+}
+
+function chunkResult(job: ImportJob, extra?: { error?: boolean; message?: string }) {
+  return {
+    done: job.phase === "done" && !extra?.error,
+    error: Boolean(extra?.error),
+    message: extra?.message || describeImportProgress(job),
+    productsDone: job.productsDone,
+    productsTotal: job.productsTotal,
+    stamp: [job.phase, job.productsDone, job.ordersDone, job.productCursor, job.pendingProductIds.length, job.activeProductId, job.variantCursor, job.orderCursor].join(":"),
+  };
+}
+
+export async function importStatus() {
+  const job = await loadJob();
+  if (!job) return { done: true, error: false, message: "Shopify has not been imported yet.", productsDone: 0, productsTotal: null as number | null, stamp: "none" };
+  return chunkResult(job);
+}
+
+export async function runImportChunk(options: { fresh?: boolean; incremental?: boolean; budgetMs?: number; maxSteps?: number; read?: Read } = {}) {
+  if (!shopifyConfigured()) {
+    return { done: true, error: false, message: "Shopify is not connected yet.", productsDone: 0, productsTotal: null as number | null, stamp: "offline" };
+  }
+  const read = options.read || shopifyGraphql;
+  let job = await loadJob();
+  if (options.fresh || !job || (options.incremental && job.phase === "done")) {
+    let search: string | null = null;
+    if (options.incremental && !options.fresh) {
+      const since = await setting("shopify_synced_at");
+      search = /^\d{4}-\d{2}-\d{2}T/.test(since) ? `updated_at:>='${since}'` : null;
+    }
+    job = blankJob(search);
+  }
+  if (job.phase === "done" && !options.fresh) return chunkResult(job);
+  const started = Date.now();
+  const budgetMs = options.budgetMs ?? 20_000;
+  const maxSteps = options.maxSteps ?? 40;
+  let steps = 0;
+  try {
+    while (job.phase !== "done" && steps < maxSteps && Date.now() - started < budgetMs) {
+      steps += 1;
+      if (job.phase === "locations") {
+        const data = await read<{ locations: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: { id: string; name: string; isActive: boolean }[] } }>(LOCATIONS_QUERY, { cursor: job.locationCursor });
+        for (const location of data.locations.nodes) {
+          if (location.isActive) await ensureLocation(location.id, location.name);
+        }
+        if (data.locations.pageInfo.hasNextPage) job.locationCursor = data.locations.pageInfo.endCursor;
+        else {
+          job.phase = "products";
+          job.productsTotal = await countOf(read, PRODUCTS_COUNT_QUERY, job.search);
+        }
+      } else if (job.phase === "products") {
+        if (!job.activeProductId && job.pendingProductIds.length) job.activeProductId = job.pendingProductIds.shift() || null;
+        if (job.activeProductId) {
+          const page = await importVariantPage(read, job.activeProductId, job.variantCursor);
+          if (page.done) {
+            job.productsDone += 1;
+            job.activeProductId = null;
+            job.variantCursor = null;
+          } else job.variantCursor = page.cursor || null;
+        } else if (job.productPagesDone) {
+          job.phase = "orders";
+          job.ordersTotal = await countOf(read, ORDERS_COUNT_QUERY, job.search);
+        } else {
+          const data = await read<{ products: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: RemoteProduct[] } }>(PRODUCT_SHELLS_QUERY, { cursor: job.productCursor, search: job.search });
+          for (const product of data.products.nodes) {
+            await upsertRemoteProduct({ ...product, variants: { nodes: [] } });
+            job.pendingProductIds.push(product.id);
+          }
+          if (data.products.pageInfo.hasNextPage) job.productCursor = data.products.pageInfo.endCursor;
+          else job.productPagesDone = true;
+          if (!data.products.nodes.length) job.productPagesDone = true;
+        }
+      } else if (job.phase === "orders") {
+        const data = await read<{ orders: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: Parameters<typeof graphqlOrder>[0][] } }>(ORDERS_QUERY, { cursor: job.orderCursor, search: job.search });
+        for (const order of data.orders.nodes) {
+          let lineCursor = order.lineItems.pageInfo?.hasNextPage ? order.lineItems.pageInfo.endCursor : null;
+          while (lineCursor) {
+            const more = await read<{ order: { lineItems: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: typeof order.lineItems.nodes } } | null }>(ORDER_LINES_QUERY, { id: order.id, cursor: lineCursor });
+            order.lineItems.nodes.push(...(more.order?.lineItems.nodes || []));
+            lineCursor = more.order?.lineItems.pageInfo.hasNextPage ? more.order.lineItems.pageInfo.endCursor : null;
+          }
+          await rememberOrder(graphqlOrder(order));
+          job.ordersDone += 1;
+        }
+        if (data.orders.pageInfo.hasNextPage && data.orders.nodes.length) job.orderCursor = data.orders.pageInfo.endCursor;
+        else job.phase = "finish";
+      } else if (job.phase === "finish") {
+        job.note = `Import finished. ${job.productsDone} products and ${job.ordersDone} orders are in S&S Software. ${await finishBarcodeSeries()}`;
+        job.phase = "done";
+        await putSetting("shopify_synced_at", new Date().toISOString());
+      }
+      await saveJob(job);
+    }
   } catch (error) {
-    const detail = error instanceof Error ? error.message : "Import failed.";
-    await prisma.syncRun.update({ where: { id: run.id }, data: { status: "error", detail, finishedAt: new Date() } });
-    return { status: "error", detail };
+    await saveJob(job);
+    const message = error instanceof Error ? error.message : "The import stopped. Press Continue.";
+    return chunkResult(job, { error: true, message });
   }
+  return chunkResult(job);
 }
 
-async function importLocations() {
-  const data = await shopifyGraphql<{ locations: { nodes: { id: string; name: string; isActive: boolean }[] } }>(LOCATIONS_QUERY);
-  for (const location of data.locations.nodes) {
-    if (location.isActive) await ensureLocation(location.id, location.name);
-  }
-}
-
-async function importProductPages(cursor: string | null, search: string | null) {
-  let page = 0;
-  let after = cursor;
-  while (page < 10) {
-    const data = await shopifyGraphql<{
-      products: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: RemoteProduct[] };
-    }>(PRODUCTS_QUERY, { cursor: after, search });
-    for (const product of data.products.nodes) await upsertRemoteProduct(product);
-    page += 1;
-    if (!data.products.pageInfo.hasNextPage) {
-      await putSetting("product_cursor", "");
-      await putSetting("product_synced_at", new Date().toISOString());
-      break;
-    }
-    after = data.products.pageInfo.endCursor;
-    await putSetting("product_cursor", after || "");
-  }
-  return page;
-}
-
-async function importOrderPages(cursor: string | null, search: string | null) {
-  let page = 0;
-  let after = cursor;
-  while (page < 10) {
-    const data = await shopifyGraphql<{
-      orders: {
-        pageInfo: { hasNextPage: boolean; endCursor: string | null };
-        nodes: Parameters<typeof graphqlOrder>[0][];
-      };
-    }>(ORDERS_QUERY, { cursor: after, search });
-    for (const order of data.orders.nodes) await rememberOrder(graphqlOrder(order));
-    page += 1;
-    if (!data.orders.pageInfo.hasNextPage) {
-      await putSetting("order_cursor", "");
-      await putSetting("order_synced_at", new Date().toISOString());
-      break;
-    }
-    after = data.orders.pageInfo.endCursor;
-    await putSetting("order_cursor", after || "");
-  }
-  return page;
+export async function importFromShopify() {
+  const result = await runImportChunk({ fresh: true });
+  await prisma.syncRun.create({ data: { kind: "shopify_import", status: result.done ? "ok" : "running", detail: result.message, finishedAt: result.done ? new Date() : null } });
+  return { status: result.done ? "ok" : "partial", detail: result.message };
 }
 
 export async function reconcile(trigger: string) {
   const run = await prisma.syncRun.create({ data: { kind: "reconcile", status: "running", detail: trigger } });
-  if (!shopifyConfigured()) {
-    const detail = "Shopify is not connected yet, so reconcile did not call the shop.";
-    await prisma.syncRun.update({ where: { id: run.id }, data: { status: "skipped", detail, finishedAt: new Date() } });
-    return { status: "skipped", detail };
-  }
-  try {
-    await importLocations();
-    const productCursor = await setting("product_cursor");
-    const productSince = await setting("product_synced_at");
-    const products = await importProductPages(productCursor || null, productCursor ? null : productSince ? `updated_at:>='${productSince}'` : null);
-    const orderCursor = await setting("order_cursor");
-    const orderSince = await setting("order_synced_at");
-    const orders = await importOrderPages(orderCursor || null, orderCursor ? null : orderSince ? `updated_at:>='${orderSince}'` : null);
-    const detail = `Reconciled ${products} product page(s) and ${orders} order page(s).`;
-    await prisma.syncRun.update({ where: { id: run.id }, data: { status: "ok", detail, finishedAt: new Date() } });
-    return { status: "ok", detail };
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : "Reconcile failed.";
-    await prisma.syncRun.update({ where: { id: run.id }, data: { status: "error", detail, finishedAt: new Date() } });
-    return { status: "error", detail };
-  }
+  const result = await runImportChunk({ incremental: true, maxSteps: 4 });
+  await prisma.syncRun.update({ where: { id: run.id }, data: { status: result.message.startsWith("Shopify is not") ? "skipped" : "ok", detail: result.message, finishedAt: new Date() } });
+  return { status: "ok", detail: result.message };
 }
 
 function asRecord(value: unknown) {

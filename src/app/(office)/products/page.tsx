@@ -4,12 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import { formatMoney, onHand } from "@/lib/format";
-import { runImport } from "@/server/actions/settings";
+import { ShopifyImport } from "@/components/shopify-import";
+import { importStatus } from "@/server/shopify-sync";
 
 export const metadata = { title: "Products" };
 
 export default async function ProductsPage({ searchParams }: { searchParams: Promise<{ q?: string; notice?: string; error?: string }> }) {
   const params = await searchParams;
+  const importing = await importStatus();
   const q = (params.q || "").trim().toLowerCase();
   const all = await prisma.product.findMany({
     include: { variants: { include: { levels: true } }, photos: { where: { role: "original" }, take: 1 } },
@@ -61,9 +63,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
         })}
       </div>
       {products.length === 0 ? <p className="mt-6 text-sm text-[#8a8496]">No products match that search.</p> : null}
-      <form action={runImport} className="mt-6">
-        <Button type="submit" variant="outline">Import from Shopify</Button>
-      </form>
+      <ShopifyImport initial={importing} />
     </div>
   );
 }
