@@ -18,6 +18,7 @@ import {
 import { prisma } from "@/lib/db";
 import { exportBackup } from "@/server/backup";
 import { countDemoSeed, demoSeedMessage, removeDemoSeed } from "@/server/clear-demo";
+import { removeDuplicateProducts } from "@/server/dedupe-products";
 import { checkStorage } from "@/lib/storage";
 import { executeFeature } from "@/server/shopify-exec";
 import { importFromShopify, reconcile } from "@/server/shopify-sync";
@@ -188,6 +189,13 @@ export async function runBackup() {
 async function ownerOnly() {
   const session = await getSession();
   if (!session || !(await isOwnerEmail(session.email))) go("/settings", { error: "Only the owner can do that." });
+}
+
+export async function removeDuplicateCopies() {
+  await ownerOnly();
+  const result = await removeDuplicateProducts();
+  revalidatePath("/");
+  go("/settings/duplicates", { notice: result.message });
 }
 
 export async function checkFileStorage() {

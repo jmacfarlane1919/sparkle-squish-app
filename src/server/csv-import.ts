@@ -13,6 +13,7 @@ import {
 import { rowsToRecords } from "@/lib/csv";
 import { prisma } from "@/lib/db";
 import { enqueueImport } from "@/server/label-queue";
+import { retiredCodes } from "@/server/retired-codes";
 
 export type CsvPreview = {
   ready: { line: number; summary: string }[];
@@ -27,10 +28,11 @@ function value(record: Record<string, string>, ...keys: string[]) {
   return "";
 }
 
-export function previewProducts(text: string): CsvPreview {
+export async function previewProducts(text: string): Promise<CsvPreview> {
   const rows = rowsToRecords(text);
   const ready: CsvPreview["ready"] = [];
   const errors: CsvPreview["errors"] = [];
+  const known = await knownVendorSkus();
   rows.forEach(({ line, record }) => {
     const title = value(record, "title", "name", "product");
     if (!title) {
@@ -44,36 +46,91 @@ export function previewProducts(text: string): CsvPreview {
     const sku = value(record, "ss_sku", "s_s_sku");
     if (sku && !parseSsSku(sku)) errors.push({ line, message: `${sku} is not an S&S SKU.` });
     if (!errors.some((error) => error.line === line)) {
-      ready.push({ line, summary: `${title} · ${sku || "new S&S SKU"} · ${value(record, "category", "category_code") || "SQ"}` });
+      const vendorSku = value(record, "vendor_sku", "supplier_sku");
+      const match = findVendorMatch(known, value(record, "supplier"), vendorSku);
+      ready.push({
+        line,
+        summary: match
+          ? `${title} · ${vendorSku} · already saved as ${match}, will update`
+          : `${title} · ${sku || vendorSku || "new S&S SKU"} · ${value(record, "category", "category_code") || "SQ"}`,
+      });
     }
   });
   if (!rows.length) errors.push({ line: 1, message: "The file has no rows." });
-  return { ready, errors };
+  const updates = ready.filter((row) => row.summary.includes("will update")).length;
+  return { ready, errors, summary: updates ? `${ready.length - updates} new rows · ${updates} already in the catalog and will be updated` : undefined };
+}
+
+async function knownVendorSkus() {
+  return prisma.variant.findMany({
+    select: { ssSku: true, vendorSku: true, product: { select: { supplier: { select: { name: true } } } } },
+  });
+}
+
+function findVendorMatch(rows: Awaited<ReturnType<typeof knownVendorSkus>>, supplierName: string, vendorSku: string) {
+  const sku = vendorSku.trim().toLowerCase();
+  if (!sku) return null;
+  const supplier = supplierName.trim().toLowerCase();
+  const found = rows.find((row) => row.vendorSku.trim().toLowerCase() === sku && (row.product.supplier?.name || "").trim().toLowerCase() === supplier);
+  return found?.ssSku || null;
 }
 
 export async function importProducts(text: string) {
-  const preview = previewProducts(text);
+  const preview = await previewProducts(text);
   if (preview.errors.length) return { imported: 0, errors: preview.errors };
   let imported = 0;
+  let updated = 0;
+  const catalog = await knownVendorSkus();
   for (const { record } of rowsToRecords(text)) {
     const title = value(record, "title", "name", "product");
+    const supplierName = value(record, "supplier");
+    const vendorSku = value(record, "vendor_sku", "supplier_sku");
+    const already = findVendorMatch(catalog, supplierName, vendorSku);
+    const supplier = supplierName ? await prisma.supplier.findFirst({ where: { name: supplierName } }) : null;
+    const costRaw = value(record, "cost", "unit_cost");
+    if (already) {
+      const variant = await prisma.variant.findFirst({ where: { ssSku: already }, include: { product: true } });
+      if (variant) {
+        await prisma.product.update({
+          where: { id: variant.productId },
+          data: {
+            title,
+            description: value(record, "description") || variant.product.description,
+            brand: value(record, "brand") || variant.product.brand,
+            texture: value(record, "texture") || variant.product.texture,
+            season: value(record, "season") || variant.product.season,
+            size: value(record, "size") || variant.product.size,
+            material: value(record, "material") || variant.product.material,
+            ageGuidance: value(record, "age_guidance", "age") || variant.product.ageGuidance,
+          },
+        });
+        await prisma.variant.update({
+          where: { id: variant.id },
+          data: {
+            priceCents: dollarsToCents(value(record, "price")) ?? variant.priceCents,
+            costCents: costRaw ? dollarsToCents(costRaw) : variant.costCents,
+            vendorBarcode: value(record, "vendor_barcode", "supplier_barcode", "upc") || variant.vendorBarcode,
+          },
+        });
+        updated += 1;
+        continue;
+      }
+    }
     const category = normalizeCategory(value(record, "category", "category_code") || "SQ");
     const variantCode = normalizeVariantCode(value(record, "variant_code", "code") || "STD");
     const existing = await prisma.variant.findMany({ select: { ssSku: true, ssBarcode: true } });
+    const retired = await retiredCodes();
     const requestedSku = value(record, "ss_sku", "s_s_sku").toUpperCase();
     const ssSku = requestedSku
       ? requestedSku
-      : allocateProductSku(category, existing.map((row) => row.ssSku).filter(Boolean), variantCode);
-    if (existing.some((row) => row.ssSku.toUpperCase() === ssSku.toUpperCase())) {
+      : allocateProductSku(category, [...existing.map((row) => row.ssSku).filter(Boolean), ...retired.skus], variantCode);
+    if (existing.some((row) => row.ssSku.toUpperCase() === ssSku.toUpperCase()) || retired.skus.some((sku) => sku.toUpperCase() === ssSku.toUpperCase())) {
       throw new Error(`${ssSku} is already in the catalog.`);
     }
     const counter = await prisma.barcodeCounter.findUnique({ where: { id: "series" } });
     const requestedBarcode = value(record, "ss_barcode", "s_s_barcode");
-    const ssBarcode = requestedBarcode || allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, existing.map((row) => row.ssBarcode).filter(Boolean));
-    if (existing.some((row) => row.ssBarcode === ssBarcode)) throw new Error(`${ssBarcode} is already in use.`);
-    const supplierName = value(record, "supplier");
-    const supplier = supplierName ? await prisma.supplier.findFirst({ where: { name: supplierName } }) : null;
-    const costRaw = value(record, "cost", "unit_cost");
+    const ssBarcode = requestedBarcode || allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, [...existing.map((row) => row.ssBarcode).filter(Boolean), ...retired.barcodes]);
+    if (existing.some((row) => row.ssBarcode === ssBarcode) || retired.barcodes.includes(ssBarcode)) throw new Error(`${ssBarcode} is already in use.`);
     const product = await prisma.product.create({
       data: {
         title,
@@ -91,7 +148,7 @@ export async function importProducts(text: string) {
           create: {
             title: value(record, "variant_title") || "Default",
             variantCode,
-            vendorSku: value(record, "vendor_sku", "supplier_sku"),
+            vendorSku,
             vendorBarcode: value(record, "vendor_barcode", "supplier_barcode", "upc"),
             ssSku,
             ssBarcode,
@@ -125,9 +182,14 @@ export async function importProducts(text: string) {
       });
       await enqueueImport(product.variants[0].id, receivedDay, Number.isFinite(onHand) ? onHand : 0);
     }
+    catalog.push({ ssSku, vendorSku, product: { supplier: supplier ? { name: supplier.name } : null } });
     imported += 1;
   }
-  return { imported, errors: [] as CsvPreview["errors"] };
+  return {
+    imported,
+    errors: [] as CsvPreview["errors"],
+    summary: `Imported ${imported} new products. Updated ${updated} that were already in the catalog.`,
+  };
 }
 
 export function previewSuppliers(text: string): CsvPreview {

@@ -19,6 +19,7 @@ import { runShopifyOperation } from "@/lib/shopify/client";
 import { recordAudit } from "@/server/audit";
 import { executeFeature, featureEnabled } from "@/server/shopify-exec";
 import { enqueueNewProduct } from "@/server/label-queue";
+import { retiredCodes } from "@/server/retired-codes";
 import { friendlyError } from "@/lib/friendly-error";
 import { go, rethrowNavigation } from "@/server/nav";
 
@@ -119,11 +120,12 @@ export async function createProduct(formData: FormData) {
   const variantCode = normalizeVariantCode(requiredText(formData, "variantCode") || "STD");
   const supplierId = requiredText(formData, "supplierId");
 
+  const retired = await retiredCodes();
   const product = await prisma.$transaction(async (tx) => {
     const existing = await tx.variant.findMany({ select: { ssSku: true, ssBarcode: true } });
     const counter = await tx.barcodeCounter.findUnique({ where: { id: "series" } });
-    const ssSku = allocateProductSku(categoryCode, existing.map((row) => row.ssSku).filter(Boolean), variantCode);
-    const ssBarcode = allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, existing.map((row) => row.ssBarcode).filter(Boolean));
+    const ssSku = allocateProductSku(categoryCode, [...existing.map((row) => row.ssSku).filter(Boolean), ...retired.skus], variantCode);
+    const ssBarcode = allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, [...existing.map((row) => row.ssBarcode).filter(Boolean), ...retired.barcodes]);
     const created = await tx.product.create({
       data: {
         title,
@@ -234,12 +236,14 @@ export async function addVariant(formData: FormData) {
   const anchor = product.variants.find((variant) => parseSsSku(variant.ssSku));
   const parsed = anchor ? parseSsSku(anchor.ssSku) : null;
   const all = await prisma.variant.findMany({ select: { ssSku: true, ssBarcode: true } });
+  const retired = await retiredCodes();
   const variantCode = normalizeVariantCode(requiredText(formData, "variantCode") || "STD");
+  const skuPool = [...all.map((row) => row.ssSku), ...retired.skus];
   const ssSku = parsed
-    ? allocateUniqueSku(parsed.category, parsed.number, variantCode, all.map((row) => row.ssSku))
-    : allocateProductSku(product.categoryCode || "SQ", all.map((row) => row.ssSku), variantCode);
+    ? allocateUniqueSku(parsed.category, parsed.number, variantCode, skuPool)
+    : allocateProductSku(product.categoryCode || "SQ", skuPool, variantCode);
   const counter = await prisma.barcodeCounter.findUnique({ where: { id: "series" } });
-  const ssBarcode = allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, all.map((row) => row.ssBarcode).filter(Boolean));
+  const ssBarcode = allocateBarcode(counter?.lastIssued || LAST_ISSUED_BARCODE, [...all.map((row) => row.ssBarcode).filter(Boolean), ...retired.barcodes]);
   const locations = await prisma.location.findMany();
   const createdVariant = await prisma.$transaction(async (tx) => {
     const created = await tx.variant.create({

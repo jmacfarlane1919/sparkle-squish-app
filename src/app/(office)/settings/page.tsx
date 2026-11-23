@@ -128,6 +128,13 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
       {owner ? (
         <section className="space-y-3 rounded-[22px] bg-white p-4">
+          <h2 className="font-extrabold">Find duplicate products</h2>
+          <p className="text-sm text-[#8a8496]">Lists app-only products that share a supplier, a name, and a supplier SKU or barcode. A second save of the products CSV created these. Products already in Shopify are not included.</p>
+          <Link href="/settings/duplicates"><Button type="button" variant="secondary">Find duplicate products</Button></Link>
+        </section>
+      ) : null}
+      {owner ? (
+        <section className="space-y-3 rounded-[22px] bg-white p-4">
           <h2 className="font-extrabold">File storage</h2>
           <p className="text-sm text-[#8a8496]">Checks that receipt photos can be saved and read back. It does not show your keys.</p>
           <form action={checkFileStorage}><Button type="submit" variant="secondary">Check file storage</Button></form>

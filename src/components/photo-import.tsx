@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { unzipSync } from "fflate";
 import { Shown } from "@/components/bits";
@@ -19,6 +19,7 @@ export function PhotoImport() {
   const [progress, setProgress] = useState("");
   const [result, setResult] = useState("");
   const [busy, setBusy] = useState(false);
+  const savingRef = useRef(false);
 
   async function previewCsv(formData: FormData) {
     const file = formData.get("csv");
@@ -58,7 +59,8 @@ export function PhotoImport() {
   }
 
   async function save() {
-    if (!preview) return;
+    if (!preview || savingRef.current) return;
+    savingRef.current = true;
     setBusy(true);
     let saved = 0;
     const missing: string[] = [];
@@ -110,6 +112,7 @@ export function PhotoImport() {
       setResult(error instanceof Error ? error.message : "The photo import stopped.");
       setProgress(saved ? `Imported ${saved} of ${preview.matched.length} photos, then stopped.` : "");
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   }

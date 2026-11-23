@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,8 @@ export function ImportPanel({
   const [csv, setCsv] = useState("");
   const [preview, setPreview] = useState<{ ready: { line: number; summary: string }[]; errors: { line: number; message: string }[]; summary?: string } | null>(null);
   const [result, setResult] = useState("");
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
 
   return (
     <section className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
@@ -69,14 +71,23 @@ export function ImportPanel({
           {preview.errors.length === 0 && preview.ready.length > 0 ? (
             <Button
               type="button"
+              disabled={saving}
               onClick={async () => {
-                const imported = await commitCsv(kind, csv);
-                const summary = "summary" in imported && typeof imported.summary === "string" ? imported.summary : "";
-                setResult(imported.errors.length ? imported.errors.map((error) => error.message).join(" ") : summary || `Imported ${imported.imported}.`);
-                if (!imported.errors.length) setPreview(null);
+                if (savingRef.current) return;
+                savingRef.current = true;
+                setSaving(true);
+                try {
+                  const imported = await commitCsv(kind, csv);
+                  const summary = "summary" in imported && typeof imported.summary === "string" ? imported.summary : "";
+                  setResult(imported.errors.length ? imported.errors.map((error) => error.message).join(" ") : summary || `Imported ${imported.imported}.`);
+                  if (!imported.errors.length) setPreview(null);
+                } finally {
+                  savingRef.current = false;
+                  setSaving(false);
+                }
               }}
             >
-              Save
+              {saving ? "Saving..." : "Save"}
             </Button>
           ) : null}
         </div>
