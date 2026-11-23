@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Field, Notice, PageIntro } from "@/components/bits";
+import { Field, Notice, PageIntro, Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
@@ -36,16 +36,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <Notice notice={params.notice} error={params.error} />
       <section className="rounded-[22px] bg-white p-4 text-sm">
         <h2 className="font-extrabold text-[#2f6fe0]">Shop</h2>
-        <p className="mt-2">{SHOP.name} · {shopifyDomain()}</p>
-        <p className="text-[#8a8496]">{SHOP.publicUrl} · USD · America/Chicago · API {SHOP.apiVersion}</p>
-        <p className="mt-2">{shopifyConfigured() ? "Shopify token is set." : "Demo mode. No Shopify token is set."}</p>
-        <p className="text-[#8a8496]">App URL for webhooks: {getAppUrl()}/api/webhooks/shopify</p>
+        <p className="mt-2">{SHOP.name} · <Shown value={shopifyDomain()} setting="SHOPIFY_STORE_DOMAIN" /></p>
+        <p className="text-[#8a8496]">{SHOP.publicUrl} · USD · America/Chicago · API <Shown value={SHOP.apiVersion} setting="SHOPIFY_API_VERSION" /></p>
+        <p className="mt-2">{shopifyConfigured() ? "Shopify token is set." : "Shopify not connected yet."}</p>
+        <p className="text-[#8a8496]">App URL for webhooks: <Shown value={getAppUrl()} setting="APP_URL" />/api/webhooks/shopify</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <form action={runImport}><Button type="submit" variant="secondary">Import from Shopify</Button></form>
           <form action={runReconcile}><Button type="submit" variant="outline">Reconcile now</Button></form>
           <form action={runBackup}><Button type="submit" variant="outline">Back up now</Button></form>
         </div>
-        {lastBackup ? <p className="mt-2 text-xs text-[#8a8496]">Last backup: {lastBackup.value}</p> : null}
+        {lastBackup ? <p className="mt-2 text-xs text-[#8a8496]">Last backup: <Shown value={lastBackup.value} /></p> : null}
       </section>
       <section className="rounded-[22px] bg-white p-4">
         <h2 className="font-extrabold text-[#2f6fe0]">S&S barcode series</h2>
@@ -114,7 +114,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <section className="rounded-[22px] bg-white p-4 text-sm">
         <h2 className="font-extrabold text-[#2f6fe0]">Recent syncs</h2>
         <ul className="mt-2 space-y-2">
-          {runs.map((run) => <li key={run.id}>{run.kind} · {run.status} · {run.detail}</li>)}
+          {runs.map((run) => <li key={run.id}>{run.kind} · {run.status} · <Shown value={run.detail} /></li>)}
           {runs.length === 0 ? <li className="text-[#8a8496]">No syncs yet.</li> : null}
         </ul>
         <p className="mt-3"><Link className="font-extrabold text-[#2f6fe0]" href="/audit">Open the audit log</Link></p>

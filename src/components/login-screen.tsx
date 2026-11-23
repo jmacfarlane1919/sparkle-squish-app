@@ -1,3 +1,4 @@
+import { Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { login, setupOwner } from "@/server/actions/auth";
@@ -26,7 +27,7 @@ export function LoginScreen({
       </div>
       {needsSetup ? (
         <form action={setupOwner} className="space-y-3 rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
-          {error ? <p className="rounded-2xl bg-[#fde8ef] px-3 py-2 text-sm font-semibold text-[#8d2d52]">{error}</p> : null}
+          {error ? <p className="rounded-2xl bg-[#fde8ef] px-3 py-2 text-sm font-semibold text-[#8d2d52]"><Shown value={error} /></p> : null}
           <p className="text-sm text-[#8a8496]">This is the first time the live site has been opened. Choose the email and password you will use from now on. The demo password will not work here.</p>
           <label className="block text-sm font-extrabold">
             Email
@@ -46,7 +47,7 @@ export function LoginScreen({
         </form>
       ) : (
         <form action={login} className="space-y-3 rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
-          {error ? <p className="rounded-2xl bg-[#fde8ef] px-3 py-2 text-sm font-semibold text-[#8d2d52]">{error}</p> : null}
+          {error ? <p className="rounded-2xl bg-[#fde8ef] px-3 py-2 text-sm font-semibold text-[#8d2d52]"><Shown value={error} /></p> : null}
           <input type="hidden" name="next" value={next} />
           <label className="block text-sm font-extrabold">
             Email

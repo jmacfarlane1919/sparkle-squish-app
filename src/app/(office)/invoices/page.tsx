@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageIntro } from "@/components/bits";
+import { Notice, PageIntro } from "@/components/bits";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
@@ -33,8 +33,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         subtitle={invoices.length ? `${invoices.length} saved invoices.` : "Supplier invoices, with the original file when you have it."}
         action={owner ? <Link href="/invoices/import"><Button>Import</Button></Link> : null}
       />
-      {params.error ? <p className="mb-4 rounded-2xl bg-[#fde8ef] px-4 py-3 text-sm font-semibold text-[#8d2d52]">{params.error}</p> : null}
-      {params.notice ? <p className="mb-4 rounded-2xl bg-[#e5f6f2] px-4 py-3 text-sm font-semibold text-[#14685a]">{params.notice}</p> : null}
+      <Notice error={params.error} />
+      {params.notice ? <Notice notice={params.notice} /> : null}
       <form className="mb-4">
         <input
           name="q"

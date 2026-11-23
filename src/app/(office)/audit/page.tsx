@@ -1,4 +1,4 @@
-import { PageIntro } from "@/components/bits";
+import { PageIntro, Shown } from "@/components/bits";
 import { prisma } from "@/lib/db";
 import { formatWhen } from "@/lib/format";
 
@@ -16,9 +16,9 @@ export default async function AuditPage() {
               <span className="font-extrabold">{entry.action}</span>
               <span className="mt-1 block text-xs text-[#8a8496]">{formatWhen(entry.createdAt)} · {entry.feature} · {entry.mode}</span>
             </summary>
-            <p className="mt-3 text-sm">{entry.summary}</p>
-            <p className="mt-2 text-sm text-[#8a8496]">{entry.result}</p>
-            {entry.payload ? <pre className="mt-3 overflow-x-auto text-[11px]">{entry.payload}</pre> : null}
+            <p className="mt-3 text-sm"><Shown value={entry.summary} /></p>
+            <p className="mt-2 text-sm text-[#8a8496]"><Shown value={entry.result} /></p>
+            {entry.payload ? <pre className="mt-3 overflow-x-auto text-[11px]"><Shown value={entry.payload} /></pre> : null}
           </details>
         ))}
       </div>

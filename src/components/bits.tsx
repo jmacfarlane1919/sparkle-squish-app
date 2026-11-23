@@ -1,9 +1,20 @@
 import Link from "next/link";
 import { ChevronRight, type LucideIcon } from "lucide-react";
+import { maskForDisplay } from "@/lib/safe-display";
+
+export function Shown({ value, setting }: { value: string; setting?: string }) {
+  const shown = maskForDisplay(value, setting);
+  return (
+    <>
+      {shown.text}
+      {shown.warning ? <span className="mt-1 block font-bold text-[#8a5a12]">{shown.warning}</span> : null}
+    </>
+  );
+}
 
 export function Notice({ notice, error }: { notice?: string; error?: string }) {
-  if (error) return <p className="mb-4 rounded-2xl bg-[#fde8ef] px-4 py-3 text-sm font-semibold text-[#8d2d52]">{error}</p>;
-  if (notice) return <p className="mb-4 rounded-2xl bg-[#e5f6f2] px-4 py-3 text-sm font-semibold text-[#14685a]">{notice}</p>;
+  if (error) return <p className="mb-4 rounded-2xl bg-[#fde8ef] px-4 py-3 text-sm font-semibold text-[#8d2d52]"><Shown value={error} /></p>;
+  if (notice) return <p className="mb-4 rounded-2xl bg-[#e5f6f2] px-4 py-3 text-sm font-semibold text-[#14685a]"><Shown value={notice} /></p>;
   return null;
 }
 

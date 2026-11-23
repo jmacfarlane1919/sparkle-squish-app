@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { commitCsv, previewCsv } from "@/server/actions/import";
 
@@ -49,12 +50,12 @@ export function ImportPanel({
         <div className="mt-4 space-y-2 text-sm">
           {preview.errors.map((error) => (
             <p key={`${error.line}-${error.message}`} className="rounded-2xl bg-[#fde8ef] px-3 py-2 text-[#8d2d52]">
-              Line {error.line}: {error.message}
+              Line {error.line}: <Shown value={error.message} />
             </p>
           ))}
           {preview.ready.map((row) => (
             <p key={row.line} className="rounded-2xl bg-[#f7f4fb] px-3 py-2">
-              Line {row.line}: {row.summary}
+              Line {row.line}: <Shown value={row.summary} />
             </p>
           ))}
           {preview.errors.length === 0 && preview.ready.length > 0 ? (
@@ -71,7 +72,7 @@ export function ImportPanel({
           ) : null}
         </div>
       ) : null}
-      {result ? <p className="mt-3 text-sm font-bold text-[#14685a]">{result}</p> : null}
+      {result ? <p className="mt-3 text-sm font-bold text-[#14685a]"><Shown value={result} /></p> : null}
     </section>
   );
 }

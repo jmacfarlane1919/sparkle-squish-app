@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BackLink, PageIntro } from "@/components/bits";
+import { BackLink, PageIntro, Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
@@ -38,7 +38,7 @@ export default async function InvoiceReviewPage({ params }: { params: Promise<{ 
       </p>
       {draft.errors.length ? (
         <ul className="mb-4 space-y-1 rounded-2xl bg-[#fde8ef] px-4 py-3 text-sm text-[#8d2d52]">
-          {draft.errors.map((error) => <li key={error}>{error}</li>)}
+          {draft.errors.map((error) => <li key={error}><Shown value={error} /></li>)}
         </ul>
       ) : null}
       <form action={commitInvoiceImport} className="space-y-3">
