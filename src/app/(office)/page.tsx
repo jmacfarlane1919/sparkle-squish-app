@@ -7,12 +7,13 @@ import { needsLabelCount } from "@/server/label-queue";
 
 export default async function HomePage() {
   const today = chicagoDateKey(new Date());
-  const [orders, refunds, variants, openOrders, labelCount] = await Promise.all([
+  const [orders, refunds, variants, openOrders, labelCount, unlinked] = await Promise.all([
     prisma.saleOrder.findMany({ include: { lines: true }, orderBy: { processedAt: "desc" }, take: 300 }),
     prisma.refund.findMany({ include: { lines: true, order: true }, orderBy: { processedAt: "desc" }, take: 100 }),
     prisma.variant.findMany({ select: { ssSku: true, ssBarcode: true, costCents: true } }),
     prisma.purchaseOrder.count({ where: { status: { in: ["ordered", "partial"] } } }),
     needsLabelCount(),
+    prisma.purchaseOrderLine.count({ where: { variantId: null } }),
   ]);
   const dayOrders = orders.filter((order) => !order.cancelled && chicagoDateKey(order.processedAt) === today);
   const dayRefunds = refunds.filter((refund) => chicagoDateKey(refund.processedAt) === today);
@@ -47,8 +48,8 @@ export default async function HomePage() {
           <p className="mt-1 text-sm text-[#8a8496]">Print the deliveries that do not have labels yet.</p>
         </Link>
         <Link href="/quality" className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(80,60,110,0.06)]">
-          <p className="text-lg font-extrabold text-[#2f6fe0]">Needs a look</p>
-          <p className="mt-1 text-sm text-[#8a8496]">{issues} identifier or cost issue{issues === 1 ? "" : "s"}. {openOrders} purchase orders are waiting on a delivery.</p>
+          <p className="text-lg font-extrabold text-[#2f6fe0]">Needs a look ({issues + unlinked})</p>
+          <p className="mt-1 text-sm text-[#8a8496]">{issues} identifier or cost issue{issues === 1 ? "" : "s"}. {unlinked} incoming {unlinked === 1 ? "item needs" : "items need"} a product. {openOrders} purchase orders are waiting on a delivery.</p>
         </Link>
       </div>
       <h2 className="mb-2 mt-6 text-sm font-extrabold text-[#8a8496]">Latest sales</h2>

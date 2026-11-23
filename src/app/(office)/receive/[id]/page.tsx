@@ -3,9 +3,9 @@ import { ScanField } from "@/components/scan-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
-import { formatMoney, formatWhen } from "@/lib/format";
+import { formatMoney, formatPreciseCost, formatWhen } from "@/lib/format";
 import { matchField } from "@/lib/identifiers";
-import { addPurchaseOrderLine, lookupReceiveCode, markOrdered, receiveLine } from "@/server/actions/purchasing";
+import { addPurchaseOrderLine, linkPurchaseOrderLine, lookupReceiveCode, markOrdered, receiveLine } from "@/server/actions/purchasing";
 import { notFound } from "next/navigation";
 
 const selectClass = "h-11 w-full rounded-2xl border border-[#e4dced] bg-white px-3 text-base";
@@ -34,6 +34,7 @@ export default async function PurchaseOrderPage({
   const matched = code ? order.lines.filter((line) => line.variant && matchField(line.variant, code)) : [];
   const variants = await prisma.variant.findMany({ include: { product: true }, orderBy: { product: { title: "asc" } } });
   const canReceive = order.status === "ordered" || order.status === "partial";
+  const unlinked = order.lines.filter((line) => !line.variantId).length;
 
   return (
     <div className="mx-auto max-w-xl">
@@ -53,22 +54,41 @@ export default async function PurchaseOrderPage({
           <Button className="mt-3" type="submit" variant="secondary">Find the line</Button>
         </form>
       ) : null}
+      {unlinked ? <p className="mb-3 rounded-2xl bg-[#fff8ec] px-4 py-3 text-sm font-bold text-[#8a5a12]">{unlinked} incoming {unlinked === 1 ? "item is" : "items are"} not linked to a product yet. Link them before checking them in.</p> : null}
       <div className="space-y-3">
         {order.lines.map((line) => {
           const remaining = line.qtyOrdered - line.qtyReceived;
           const active = matched.some((row) => row.id === line.id);
           return (
-            <section key={line.id} className={`rounded-[22px] bg-white p-4 ${active ? "ring-2 ring-[#2f6fe0]" : ""}`}>
+            <section key={line.id} className={`rounded-[22px] bg-white p-4 ${active ? "ring-2 ring-[#2f6fe0]" : ""} ${line.variant ? "" : "border border-[#f6e7c8]"}`}>
               <p className="font-extrabold">{line.description}</p>
-              <p className="text-xs text-[#8a8496]">{line.variant?.ssSku} · {line.variant?.ssBarcode}</p>
-              <p className="mt-1 text-sm">{line.qtyReceived} of {line.qtyOrdered} received · {formatMoney(line.unitCostCents)} each</p>
-              {canReceive && remaining > 0 ? (
+              {line.variant ? (
+                <p className="text-xs text-[#8a8496]">{line.variant.ssSku} · {line.variant.ssBarcode}</p>
+              ) : (
+                <p className="text-xs font-bold text-[#8a5a12]">Incoming item · not in the catalog yet{line.supplierSku ? ` · supplier SKU ${line.supplierSku}` : ""}</p>
+              )}
+              <p className="mt-1 text-sm">{line.qtyReceived} of {line.qtyOrdered} received · {formatPreciseCost(line.unitCostPrecise, line.unitCostCents)} each</p>
+              {line.variant && canReceive && remaining > 0 ? (
                 <form action={receiveLine} className="mt-3 flex items-end gap-2">
                   <input type="hidden" name="lineId" value={line.id} />
                   <Field label="Qty">
                     <Input name="qty" type="number" min={1} max={remaining} defaultValue={1} className="w-24" />
                   </Field>
                   <Button type="submit">Check in</Button>
+                </form>
+              ) : null}
+              {!line.variant ? (
+                <form action={linkPurchaseOrderLine} className="mt-3 space-y-2">
+                  <input type="hidden" name="lineId" value={line.id} />
+                  <Field label="Link to product">
+                    <select name="variantId" className={selectClass} required defaultValue="">
+                      <option value="" disabled>Choose a product</option>
+                      {variants.map((variant) => (
+                        <option key={variant.id} value={variant.id}>{variant.product.title} · {variant.ssSku || variant.vendorSku}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Button type="submit" variant="secondary">Link to product</Button>
                 </form>
               ) : null}
             </section>

@@ -390,9 +390,11 @@ model PurchaseOrderLine {
   variantId       String?
   variant         Variant?      @relation(fields: [variantId], references: [id])
   description     String        @default("")
+  supplierSku     String        @default("")
   qtyOrdered      Int
   qtyReceived     Int           @default(0)
   unitCostCents   Int
+  unitCostPrecise Int?
   receiptLines    ReceiptLine[]
 }
 

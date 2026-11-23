@@ -1,2 +1,4 @@
-po_number,supplier,status,location,ordered_at,invoice,sku,qty_ordered,qty_received,unit_cost,notes
-PO-SAMPLE,Mochi Lane,draft,The Squishy Shop,,,SS-SQ-043-STD,6,0,5.25,Sample purchase order row
+po_number,supplier,status,location,ordered_at,invoice,sku,product,supplier_sku,qty_ordered,qty_received,unit_cost,line_total,notes
+PO-SAMPLE,Mochi Lane,draft,The Squishy Shop,,,SS-SQ-043-STD,Peach Mochi Bear,,6,0,5.25,,Sample purchase order row
+#PO43,Speks,ordered,,,,Zorbitz Orb,ZOR-ORB,5,0,4.025,,Incoming item with a four-decimal cost
+#PO43,Speks,ordered,,,,,Hape Display,,1,0,,12.00,Cost comes from the line total

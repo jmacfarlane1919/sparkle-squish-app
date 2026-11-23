@@ -127,7 +127,8 @@ export async function receiveLine(formData: FormData) {
       variant: { include: { levels: true, product: true } },
     },
   });
-  if (!line || !line.variant) go("/receive", { error: "That line is not on an open order." });
+  if (!line) go("/receive", { error: "That line is not on an open order." });
+  if (!line.variant) go(`/receive/${line.purchaseOrderId}`, { error: "Link this incoming item to a product before checking it in. Nothing was received." });
   const po = line.purchaseOrder;
   if (po.status !== "ordered" && po.status !== "partial") {
     go(`/receive/${po.id}`, { error: "Mark the purchase order ordered before checking items in." });
@@ -210,6 +211,20 @@ export async function receiveLine(formData: FormData) {
   go(`/receive/${po.id}`, {
     notice: `Checked in ${qty}. On hand is now ${plan.newOnHand}. Added to Needs labels. ${stock.result}`,
   });
+}
+
+export async function linkPurchaseOrderLine(formData: FormData) {
+  const lineId = text(formData, "lineId");
+  const variantId = text(formData, "variantId");
+  const line = await prisma.purchaseOrderLine.findUnique({ where: { id: lineId } });
+  if (!line) go("/receive", { error: "That line is gone." });
+  const variant = await prisma.variant.findUnique({ where: { id: variantId }, include: { product: true } });
+  if (!variant) go(`/receive/${line.purchaseOrderId}`, { error: "Pick a product from the catalog." });
+  await prisma.purchaseOrderLine.update({
+    where: { id: line.id },
+    data: { variantId: variant.id, description: variant.product.title },
+  });
+  go(`/receive/${line.purchaseOrderId}`, { notice: `Linked to ${variant.product.title}. You can check it in now.` });
 }
 
 export async function lookupReceiveCode(formData: FormData) {

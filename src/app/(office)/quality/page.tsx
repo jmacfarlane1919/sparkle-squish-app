@@ -16,10 +16,26 @@ export default async function QualityPage() {
   const duplicateBarcodes = [...byBarcode.entries()].filter(([, rows]) => rows.length > 1);
   const missingCosts = variants.filter((variant) => variant.costCents == null);
   const missingCodes = variants.filter((variant) => !variant.ssSku || !variant.ssBarcode);
+  const incoming = await prisma.purchaseOrderLine.findMany({
+    where: { variantId: null },
+    include: { purchaseOrder: true },
+    orderBy: { description: "asc" },
+  });
 
   return (
     <div className="mx-auto max-w-xl">
-      <PageIntro title="Data quality" subtitle="Duplicate S&S SKUs, duplicate S&S barcodes, and products missing a cost." />
+      <PageIntro title="Data quality" subtitle="Duplicate S&S SKUs, duplicate S&S barcodes, products missing a cost, and purchase-order lines that are not linked to a product yet." />
+      <section className="mt-4 rounded-[22px] bg-white p-4">
+        <h2 className="font-extrabold text-[#2f6fe0]">Incoming items ({incoming.length})</h2>
+        {incoming.length === 0 ? <p className="mt-2 text-sm text-[#8a8496]">Every purchase-order line is linked to a product.</p> : null}
+        <ul className="mt-2 space-y-2">
+          {incoming.map((line) => (
+            <li key={line.id}>
+              <Link className="text-sm font-bold" href={`/receive/${line.purchaseOrderId}`}>{line.purchaseOrder.number} · {line.description}{line.supplierSku ? ` · ${line.supplierSku}` : ""}</Link>
+            </li>
+          ))}
+        </ul>
+      </section>
       <Group title="Duplicate S&S SKUs" empty="No duplicate S&S SKUs." rows={duplicateSkus} />
       <Group title="Duplicate S&S barcodes" empty="No duplicate S&S barcodes." rows={duplicateBarcodes} />
       <section className="mt-4 rounded-[22px] bg-white p-4">

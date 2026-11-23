@@ -17,7 +17,7 @@ export function ImportPanel({
   sample: string;
 }) {
   const [csv, setCsv] = useState("");
-  const [preview, setPreview] = useState<{ ready: { line: number; summary: string }[]; errors: { line: number; message: string }[] } | null>(null);
+  const [preview, setPreview] = useState<{ ready: { line: number; summary: string }[]; errors: { line: number; message: string }[]; summary?: string } | null>(null);
   const [result, setResult] = useState("");
 
   return (
@@ -48,6 +48,7 @@ export function ImportPanel({
       </form>
       {preview ? (
         <div className="mt-4 space-y-2 text-sm">
+          {preview.summary ? <p className="font-extrabold">{preview.summary}</p> : null}
           {preview.errors.map((error) => (
             <p key={`${error.line}-${error.message}`} className="rounded-2xl bg-[#fde8ef] px-3 py-2 text-[#8d2d52]">
               Line {error.line}: <Shown value={error.message} />
@@ -63,7 +64,8 @@ export function ImportPanel({
               type="button"
               onClick={async () => {
                 const imported = await commitCsv(kind, csv);
-                setResult(imported.errors.length ? imported.errors.map((error) => error.message).join(" ") : `Imported ${imported.imported}.`);
+                const summary = "summary" in imported && typeof imported.summary === "string" ? imported.summary : "";
+                setResult(imported.errors.length ? imported.errors.map((error) => error.message).join(" ") : summary || `Imported ${imported.imported}.`);
                 if (!imported.errors.length) setPreview(null);
               }}
             >

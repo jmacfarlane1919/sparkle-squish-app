@@ -1,4 +1,5 @@
 import { dollarsToCents } from "@/lib/format";
+import { planPurchaseOrders, poPlanSummary, type PoPlan } from "@/lib/purchase-orders/csv";
 import {
   LAST_ISSUED_BARCODE,
   allocateBarcode,
@@ -16,6 +17,7 @@ import { enqueueImport } from "@/server/label-queue";
 export type CsvPreview = {
   ready: { line: number; summary: string }[];
   errors: { line: number; message: string }[];
+  summary?: string;
 };
 
 function value(record: Record<string, string>, ...keys: string[]) {
@@ -161,71 +163,87 @@ export async function importSuppliers(text: string) {
   return { imported, errors: [] as CsvPreview["errors"] };
 }
 
-export function previewOrders(text: string): CsvPreview {
+async function purchaseOrderContext() {
+  const [variants, suppliers, locations] = await Promise.all([
+    prisma.variant.findMany({ select: { id: true, ssSku: true, vendorSku: true, costCents: true, product: { select: { title: true } } } }),
+    prisma.supplier.findMany({ select: { id: true, name: true } }),
+    prisma.location.findMany({ select: { id: true, name: true, isDefaultReceive: true }, orderBy: { name: "asc" } }),
+  ]);
+  return {
+    catalog: variants.map((variant) => ({ id: variant.id, title: variant.product.title, ssSku: variant.ssSku, vendorSku: variant.vendorSku, costCents: variant.costCents })),
+    suppliers,
+    locations,
+  };
+}
+
+export async function previewOrders(text: string): Promise<CsvPreview> {
   const rows = rowsToRecords(text);
-  const ready: CsvPreview["ready"] = [];
-  const errors: CsvPreview["errors"] = [];
-  rows.forEach(({ line, record }) => {
-    const po = value(record, "po_number", "number") || "(new)";
-    const sku = value(record, "sku", "ss_sku", "vendor_sku");
-    if (!value(record, "supplier")) errors.push({ line, message: "Each row needs a supplier." });
-    if (!sku) errors.push({ line, message: "Each row needs a SKU." });
-    else ready.push({ line, summary: `${po} · ${sku} · qty ${value(record, "qty_ordered", "quantity") || "?"}` });
-  });
-  if (!rows.length) errors.push({ line: 1, message: "The file has no rows." });
-  return { ready, errors };
+  if (!rows.length) return { ready: [], errors: [{ line: 1, message: "The file has no rows." }], summary: "0 purchase orders · 0 lines matched · 0 lines unlinked · 1 problem" };
+  const plan = planPurchaseOrders({ rows, ...(await purchaseOrderContext()) });
+  return previewFromPlan(plan);
+}
+
+function previewFromPlan(plan: PoPlan): CsvPreview {
+  return {
+    summary: poPlanSummary(plan),
+    errors: plan.problems,
+    ready: plan.orders.flatMap((order) =>
+      order.lines.map((line) => ({
+        line: line.line,
+        summary: `${order.number} · ${line.description}${line.supplierSku ? ` · ${line.supplierSku}` : ""} · qty ${line.qtyOrdered} · ${line.linked ? "matched" : "incoming, not in the catalog yet"}`,
+      })),
+    ),
+  };
 }
 
 export async function importPurchaseOrders(text: string) {
-  const preview = previewOrders(text);
-  if (preview.errors.length) return { imported: 0, errors: preview.errors };
-  const groups = new Map<string, { record: Record<string, string>; line: number }[]>();
-  rowsToRecords(text).forEach((row) => {
-    const key = value(row.record, "po_number", "number") || `row-${row.line}`;
-    groups.set(key, [...(groups.get(key) || []), row]);
-  });
+  const rows = rowsToRecords(text);
+  const plan = planPurchaseOrders({ rows, ...(await purchaseOrderContext()) });
+  if (plan.problems.length) return { imported: 0, errors: plan.problems, summary: poPlanSummary(plan) };
   let imported = 0;
-  for (const [number, rows] of groups) {
-    const first = rows[0].record;
-    const supplier = await prisma.supplier.findFirst({ where: { name: value(first, "supplier") } });
-    if (!supplier) throw new Error(`Add ${value(first, "supplier")} as a supplier before this purchase order.`);
-    const locationName = value(first, "location") || "The Squishy Shop";
-    const location = (await prisma.location.findFirst({ where: { name: locationName } })) || (await prisma.location.findFirst({ where: { isDefaultReceive: true } }));
-    if (!location) throw new Error("Add a location before importing purchase orders.");
-    const status = value(first, "status") || "draft";
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        number: number.startsWith("PO-") ? number : `PO-${number}`,
-        supplierId: supplier.id,
-        locationId: location.id,
-        status,
-        invoiceNumber: value(first, "invoice", "invoice_number"),
-        notes: value(first, "notes"),
-        orderedAt: ["ordered", "partial", "received"].includes(status) ? new Date(value(first, "ordered_at") || Date.now()) : null,
-      },
-    });
-    for (const row of rows) {
-      const sku = value(row.record, "sku", "ss_sku", "vendor_sku");
-      const variant = await prisma.variant.findFirst({
-        where: { OR: [{ ssSku: sku }, { ssSku: sku.toUpperCase() }, { vendorSku: sku }] },
-        include: { product: true },
+  for (const order of plan.orders) {
+    const existing = await prisma.purchaseOrder.findUnique({ where: { number: order.number }, include: { lines: true } });
+    const data = {
+      supplierId: order.supplierId,
+      locationId: order.locationId,
+      status: order.status,
+      invoiceNumber: order.invoice,
+      notes: order.notes,
+      orderedAt: order.orderedAt ? new Date(order.orderedAt) : null,
+    };
+    const po = existing
+      ? await prisma.purchaseOrder.update({ where: { id: existing.id }, data, include: { lines: true } })
+      : await prisma.purchaseOrder.create({ data: { number: order.number, ...data }, include: { lines: true } });
+    const used = new Set<string>();
+    for (const line of order.lines) {
+      const match = po.lines.find((row) => {
+        if (used.has(row.id)) return false;
+        if (line.variantId) return row.variantId === line.variantId && row.supplierSku === line.supplierSku && row.description === line.description;
+        return !row.variantId && row.supplierSku === line.supplierSku && row.description === line.description;
       });
-      if (!variant) throw new Error(`${sku} is not in the catalog.`);
-      const ordered = Number(value(row.record, "qty_ordered", "quantity") || "0");
-      const received = Number(value(row.record, "qty_received") || "0");
-      const cost = dollarsToCents(value(row.record, "unit_cost", "cost")) ?? variant.costCents ?? 0;
-      await prisma.purchaseOrderLine.create({
-        data: {
-          purchaseOrderId: po.id,
-          variantId: variant.id,
-          description: variant.product.title,
-          qtyOrdered: ordered,
-          qtyReceived: received,
-          unitCostCents: cost,
-        },
-      });
+      const lineData = {
+        variantId: line.variantId,
+        description: line.description,
+        supplierSku: line.supplierSku,
+        qtyOrdered: match ? Math.max(line.qtyOrdered, match.qtyReceived) : line.qtyOrdered,
+        qtyReceived: match ? Math.max(match.qtyReceived, line.qtyReceived) : line.qtyReceived,
+        unitCostCents: line.cents,
+        unitCostPrecise: line.precise,
+      };
+      if (match) {
+        used.add(match.id);
+        await prisma.purchaseOrderLine.update({ where: { id: match.id }, data: lineData });
+      } else {
+        await prisma.purchaseOrderLine.create({ data: { purchaseOrderId: po.id, ...lineData } });
+      }
     }
+    const leftovers = po.lines.filter((row) => !used.has(row.id) && row.qtyReceived === 0);
+    if (leftovers.length) await prisma.purchaseOrderLine.deleteMany({ where: { id: { in: leftovers.map((row) => row.id) } } });
     imported += 1;
   }
-  return { imported, errors: [] as CsvPreview["errors"] };
+  return {
+    imported,
+    errors: [] as CsvPreview["errors"],
+    summary: `Saved ${imported} purchase orders. ${plan.matched} lines matched a product. ${plan.unlinked} incoming lines are waiting to be linked.`,
+  };
 }

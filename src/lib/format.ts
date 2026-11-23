@@ -18,6 +18,20 @@ export function dollarsToCents(value: string): number | null {
   return Number(dollars) * 100 + Number(fraction.padEnd(2, "0"));
 }
 
+/** Dollars with up to 4 decimal places, stored as ten-thousandths of a dollar. */
+export function parsePreciseDollars(value: string): { cents: number; precise: number } | null {
+  const trimmed = value.trim().replace(/^\$/, "").replace(/,/g, "");
+  if (!trimmed || !/^\d+(\.\d{1,4})?$/.test(trimmed)) return null;
+  const [dollars, fraction = ""] = trimmed.split(".");
+  const precise = Number(dollars) * 10000 + Number(fraction.padEnd(4, "0").slice(0, 4));
+  return { precise, cents: Math.round(precise / 100) };
+}
+
+export function formatPreciseCost(precise: number | null | undefined, cents: number) {
+  if (precise == null) return formatMoney(cents);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(precise / 10000);
+}
+
 export function centsToDollarInput(cents: number | null | undefined) {
   if (cents == null) return "";
   return (cents / 100).toFixed(2);
