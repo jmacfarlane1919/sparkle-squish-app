@@ -34,7 +34,12 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
         action={owner ? <Link href="/invoices/import"><Button>Import</Button></Link> : null}
       />
       <Notice error={params.error} />
-      {params.notice ? <Notice notice={params.notice} /> : null}
+      {params.notice ? (
+        <div className="mb-4 rounded-2xl bg-[#e5f6f2] px-4 py-3 text-sm font-bold text-[#14685a]">
+          <p>{params.notice}</p>
+          <Link className="mt-2 inline-block text-[#2f6fe0]" href="/invoices">Open the invoice list</Link>
+        </div>
+      ) : null}
       <form className="mb-4">
         <input
           name="q"

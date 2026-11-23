@@ -101,7 +101,7 @@ export default async function InvoiceReviewPage({ params }: { params: Promise<{ 
           </ul>
         </section>
         <div className="flex flex-wrap gap-2">
-          <Button type="submit">Import</Button>
+          <Button type="submit">Save invoices</Button>
           <Link href="/invoices/import" className="inline-flex h-11 items-center rounded-2xl px-4 text-sm font-extrabold text-[#8a8496]">
             Start over
           </Link>

@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { commitCsv, previewCsv } from "@/server/actions/import";
+
+const doneLink = {
+  products: ["/products", "Open products"],
+  suppliers: ["/suppliers", "Open suppliers"],
+  orders: ["/receive", "Open purchase orders"],
+} as const;
 
 export function ImportPanel({
   kind,
@@ -69,12 +76,17 @@ export function ImportPanel({
                 if (!imported.errors.length) setPreview(null);
               }}
             >
-              Import {preview.ready.length}
+              Save
             </Button>
           ) : null}
         </div>
       ) : null}
-      {result ? <p className="mt-3 text-sm font-bold text-[#14685a]"><Shown value={result} /></p> : null}
+      {result ? (
+        <div className={`mt-3 rounded-2xl px-4 py-3 text-sm font-bold ${result.startsWith("Imported") ? "bg-[#e5f6f2] text-[#14685a]" : "bg-[#fff8ec] text-[#8a5a12]"}`}>
+          <p><Shown value={result} /></p>
+          {result.startsWith("Imported") ? <Link className="mt-2 inline-block text-[#2f6fe0]" href={doneLink[kind][0]}>{doneLink[kind][1]}</Link> : null}
+        </div>
+      ) : null}
     </section>
   );
 }

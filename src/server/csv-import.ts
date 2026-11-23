@@ -244,6 +244,6 @@ export async function importPurchaseOrders(text: string) {
   return {
     imported,
     errors: [] as CsvPreview["errors"],
-    summary: `Saved ${imported} purchase orders. ${plan.matched} lines matched a product. ${plan.unlinked} incoming lines are waiting to be linked.`,
+    summary: `Imported ${imported} purchase orders. ${plan.matched} lines matched a product. ${plan.unlinked} incoming lines are waiting to be linked.`,
   };
 }

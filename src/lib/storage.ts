@@ -85,6 +85,51 @@ export async function checkStorage(): Promise<{ ok: boolean; message: string }> 
   }
 }
 
+export async function hasStoredObject(key: string) {
+  if (s3Configured()) {
+    const { S3Client, HeadObjectCommand } = await import("@aws-sdk/client-s3");
+    const client = new S3Client({
+      region: process.env.S3_REGION || "auto",
+      endpoint: process.env.S3_ENDPOINT || undefined,
+      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+      credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
+      },
+    });
+    try {
+      await client.send(new HeadObjectCommand({ Bucket: process.env.S3_BUCKET || "", Key: key }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    await readFile(localPath(key));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function presignUpload(key: string, contentType: string) {
+  if (!s3Configured()) return null;
+  const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const client = new S3Client({
+    region: process.env.S3_REGION || "auto",
+    endpoint: process.env.S3_ENDPOINT || undefined,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    credentials: {
+      accessKeyId: process.env.S3_ACCESS_KEY_ID || "",
+      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
+    },
+  });
+  const command = new PutObjectCommand({ Bucket: process.env.S3_BUCKET || "", Key: key, ContentType: contentType });
+  const url = await getSignedUrl(client, command, { expiresIn: 600 });
+  return url;
+}
+
 export async function deleteBytes(key: string) {
   if (s3Configured()) {
     const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");

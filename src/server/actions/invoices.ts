@@ -19,6 +19,6 @@ export async function commitInvoiceImport(formData: FormData) {
   revalidatePath("/invoices");
   revalidatePath("/receive");
   go("/invoices", {
-    notice: `Saved ${result.invoices} invoices and attached ${result.attached} files. ${result.skipped} files were left unmatched.`,
+    notice: `Imported ${result.invoices} invoices and ${result.attached} files. ${result.skipped} files were left unmatched.`,
   });
 }
