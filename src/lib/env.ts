@@ -14,7 +14,10 @@ export function shopifyDomain() {
 }
 
 export function shopifyConfigured() {
-  return Boolean(process.env.SHOPIFY_ADMIN_TOKEN && shopifyDomain());
+  const domain = shopifyDomain();
+  if (!domain) return false;
+  if (process.env.SHOPIFY_ADMIN_TOKEN) return true;
+  return Boolean(process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET);
 }
 
 export function isDemoMode() {

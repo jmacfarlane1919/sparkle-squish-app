@@ -24,7 +24,7 @@ export async function executeFeature(feature: FeatureKey, action: string, summar
     return { mode: "blocked" as const, result };
   }
   if (!shopifyConfigured()) {
-    const result = "Demo mode: the Shopify token is not set, so this stayed a dry run.";
+    const result = "Shopify is not connected yet, so this stayed a dry run.";
     await recordAudit({ feature, action, mode: "dry_run", summary, payload, result });
     return { mode: "dry_run" as const, result };
   }

@@ -1,12 +1,13 @@
 import { verifyShopifyWebhook } from "@/lib/shopify/hmac";
 import { handleWebhook } from "@/server/shopify-sync";
+import { webhookSecret } from "@/server/shopify-token";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer());
   const header = request.headers.get("x-shopify-hmac-sha256");
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET || "";
+  const secret = webhookSecret();
   if (!verifyShopifyWebhook(raw, header, secret)) {
     return new Response("Invalid signature", { status: 401 });
   }

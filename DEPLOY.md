@@ -68,8 +68,10 @@ In the Vercel project, open **Settings → Environment Variables**. Add every ro
 | `SESSION_SECRET` | A new random string, at least 24 characters. On your computer run `openssl rand -base64 32` and paste the result. |
 | `APP_URL` | The live address, with `https://` and no slash at the end. After the first deploy this is the `.vercel.app` address Vercel shows. You can deploy once, copy that address, set `APP_URL`, and redeploy. |
 | `SHOPIFY_STORE_DOMAIN` | `mw4ti4-tj.myshopify.com` |
-| `SHOPIFY_ADMIN_TOKEN` | The Admin API access token from the Shopify custom app in step 6. Leave this blank for the first deploy if the app is not installed yet. The site still opens. It will not talk to Shopify until this is set. |
-| `SHOPIFY_WEBHOOK_SECRET` | The custom app’s **API secret key** (not the access token). |
+| `SHOPIFY_CLIENT_ID` | The client id from the Dev Dashboard app’s Settings page. |
+| `SHOPIFY_CLIENT_SECRET` | The client secret from that same page. |
+| `SHOPIFY_ADMIN_TOKEN` | Leave blank. Only fill this if you still have an older app that shows an `shpat_` token. |
+| `SHOPIFY_WEBHOOK_SECRET` | The same client secret. |
 | `SHOPIFY_API_VERSION` | `2026-10` |
 | `CRON_SECRET` | Another random string from `openssl rand -base64 32`. Vercel sends it when the daily jobs run. |
 | `S3_ENDPOINT` | The R2 S3 endpoint, such as `https://YOUR_ACCOUNT_ID.r2.cloudflare.com`. |
@@ -83,21 +85,22 @@ Then click **Deploy**.
 
 The build runs the database migration. You do not run a migration by hand.
 
-## 6. Shopify custom app
+## 6. Shopify app in the Dev Dashboard
 
-Do this in the Shopify admin for Sparkle & Squish. The app only gets the token. It does not change products until you turn a switch on inside S&S Software.
+The app does not change products until you turn a switch on inside S&S Software. New Dev Dashboard apps do not show an Admin API token. They show a client id and a client secret. This app trades those for a token that lasts 24 hours.
 
-Shopify no longer creates custom apps from the old admin screen. Use the Dev Dashboard.
+1. Open the Dev Dashboard and create the app, or open the one you already created.
+2. Open **Versions** and create a version.
+3. Set the **App URL** to `https://sparkle-squish-app-f2ok.vercel.app`. You do not need a redirect URL. This login does not send anyone back to the app.
+4. Set the webhooks API version to **2026-10**.
+5. Add the scopes below, then **Release** the version.
+6. On the app’s home, choose **Install app**, pick `mw4ti4-tj.myshopify.com`, and approve the permissions.
+7. Open the app’s **Settings** and copy the **Client ID** and **Client secret** into Vercel as `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`.
+8. Put that same client secret in `SHOPIFY_WEBHOOK_SECRET`.
+9. Leave `SHOPIFY_ADMIN_TOKEN` blank unless you still have an older app that shows an `shpat_` token.
+10. Redeploy so Vercel picks up the new variables.
 
-1. Sign in to the Shopify admin for Sparkle & Squish.
-2. Go to **Settings → Apps and sales channels**.
-3. Open **Develop apps**. If it sends you to the Dev Dashboard, stay there.
-4. Create an app named **S&S Software**.
-5. Open **Admin API** scopes and turn on only the scopes below.
-6. Install the app on `mw4ti4-tj.myshopify.com`.
-7. Reveal the **Admin API access token** once and put it in `SHOPIFY_ADMIN_TOKEN`.
-8. Copy the app’s **API secret key** into `SHOPIFY_WEBHOOK_SECRET`.
-9. Redeploy, or edit the variables and redeploy, so Vercel picks up the token.
+After that, open **Settings** in S&S Software. It should say **Shopify connected** and list the permissions. If the app is not installed, or a permission is missing, it says so in plain English.
 
 ### Scopes to turn on
 

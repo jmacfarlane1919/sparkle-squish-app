@@ -52,20 +52,20 @@ npm run dev
 
 ## Connect the real Sparkle & Squish shop
 
-Leave the demo token blank until you are ready. When you connect the live shop, start from an empty database. Do not press “Reload the sample shop” after the live token is in place. That button is hidden once the token is set, and the seed command refuses to run.
+Leave the Shopify fields blank until you are ready. When you connect the live shop, start from an empty database. Do not press “Reload the sample shop” after Shopify is connected. That button is hidden once the connection is set, and the seed command refuses to run.
 
 ### 1. Create the app in Shopify
 
-Shopify no longer lets a store create a brand-new custom app from the old admin screen. Use the Dev Dashboard. The app still gives you an Admin API token, which is all this software needs.
+New apps are created in the Dev Dashboard. They give you a client id and a client secret, not a permanent Admin API token. This app trades those for a token that lasts 24 hours and refreshes it on its own.
 
-1. Sign in to the Shopify admin for Sparkle & Squish.
-2. Go to **Settings → Apps and sales channels**.
-3. Open **Develop apps** (it may send you to the Dev Dashboard).
-4. Create an app named **S&S Software**.
-5. Open the app’s **Admin API** scopes and turn on only the ones in the list below.
-6. Install the app on this store.
-7. Reveal the **Admin API access token** and copy it. Shopify shows it once.
-8. Copy the app’s **API secret key**. That is the webhook secret.
+1. Open the Dev Dashboard and create an app named **S&S Software**.
+2. Create a version. Set the App URL to this app’s https address. A redirect URL is not required.
+3. On that version, turn on the scopes in the list below, set the webhooks API version to **2026-10**, and release the version.
+4. Install the app on `mw4ti4-tj.myshopify.com` and approve the permissions.
+5. Copy the **Client ID** and **Client secret** from the app’s Settings page.
+6. Put the client secret in `SHOPIFY_WEBHOOK_SECRET` as well. That is what checks incoming webhooks.
+
+If you still have an older custom app that shows an `shpat_` token, you can put that in `SHOPIFY_ADMIN_TOKEN` instead and leave the client id blank.
 
 ### 2. Scopes to turn on
 
@@ -101,8 +101,10 @@ Copy `.env.example` to `.env` if setup did not already do that. Then set:
 | `SESSION_SECRET` | A long random string. This locks the sign-in cookie. |
 | `APP_URL` | The public address of this app, with no slash at the end. |
 | `SHOPIFY_STORE_DOMAIN` | `mw4ti4-tj.myshopify.com` |
-| `SHOPIFY_ADMIN_TOKEN` | The Admin API token from the step above. Leave blank for the demo. |
-| `SHOPIFY_WEBHOOK_SECRET` | The app’s API secret key. |
+| `SHOPIFY_CLIENT_ID` | The client id from the Dev Dashboard app’s Settings page. |
+| `SHOPIFY_CLIENT_SECRET` | The client secret from that same page. |
+| `SHOPIFY_ADMIN_TOKEN` | Optional. Only for an older app that still shows an `shpat_` token. Leave blank when the client id is set. |
+| `SHOPIFY_WEBHOOK_SECRET` | The same client secret. |
 | `SHOPIFY_API_VERSION` | `2026-10` |
 | `CRON_SECRET` | Another long random string. Vercel sends it when the scheduled jobs run. |
 | `S3_ENDPOINT` | Only if photos live in S3 or Cloudflare R2. |

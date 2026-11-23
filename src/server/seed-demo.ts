@@ -468,7 +468,7 @@ async function seedIfEmpty() {
 
 export async function seedDemo() {
   if (shopifyConfigured() && process.env.SEED_DEMO !== "force") {
-    throw new Error("Refusing to load demo data because SHOPIFY_ADMIN_TOKEN is set.");
+    throw new Error("Refusing to load demo data because Shopify is connected.");
   }
   await prisma.$transaction([
     prisma.labelQueueItem.deleteMany(),

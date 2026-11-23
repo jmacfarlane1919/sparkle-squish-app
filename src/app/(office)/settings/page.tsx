@@ -3,13 +3,14 @@ import { Field, Notice, PageIntro, Shown } from "@/components/bits";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
-import { SHOP, getAppUrl, shopifyConfigured, shopifyDomain, shouldLoadDemo } from "@/lib/env";
+import { SHOP, getAppUrl, shopifyDomain, shouldLoadDemo } from "@/lib/env";
 import { getSession } from "@/lib/auth";
 import { isOwnerEmail } from "@/lib/owner";
 import { FEATURES } from "@/lib/features";
 import { NEXT_FREE_BARCODE, allocateBarcode } from "@/lib/identifiers";
 import { DEFAULT_LABELS_PRINTED_THROUGH } from "@/lib/labels/queue";
 import { checkFileStorage, clearSampleData, previewFeature, reloadDemo, runBackup, runImport, runReconcile, saveCategory, saveLabelCutoff, toggleFeature, toggleNiimbotBluetooth } from "@/server/actions/settings";
+import { describeShopifyConnection } from "@/server/shopify-token";
 
 export const metadata = { title: "Settings" };
 
@@ -28,6 +29,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 5 }),
   ]);
   const nextBarcode = counter ? allocateBarcode(counter.lastIssued, barcodes.map((row) => row.ssBarcode).filter(Boolean)) : NEXT_FREE_BARCODE;
+  const shopify = await describeShopifyConnection();
   const byKey = new Map(flags.map((flag) => [flag.key, flag.enabled]));
 
   return (
@@ -38,7 +40,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <h2 className="font-extrabold text-[#2f6fe0]">Shop</h2>
         <p className="mt-2">{SHOP.name} · <Shown value={shopifyDomain()} setting="SHOPIFY_STORE_DOMAIN" /></p>
         <p className="text-[#8a8496]">{SHOP.publicUrl} · USD · America/Chicago · API <Shown value={SHOP.apiVersion} setting="SHOPIFY_API_VERSION" /></p>
-        <p className="mt-2">{shopifyConfigured() ? "Shopify token is set." : "Shopify not connected yet."}</p>
+        <p className={`mt-2 font-bold ${shopify.ok ? "text-[#14685a]" : "text-[#8a5a12]"}`}>{shopify.headline}</p>
+        {shopify.detail ? <p className="text-[#8a8496]"><Shown value={shopify.detail} /></p> : null}
         <p className="text-[#8a8496]">App URL for webhooks: <Shown value={getAppUrl()} setting="APP_URL" />/api/webhooks/shopify</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <form action={runImport}><Button type="submit" variant="secondary">Import from Shopify</Button></form>

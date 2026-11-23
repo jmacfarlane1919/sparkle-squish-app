@@ -466,7 +466,7 @@ async function importOrderPages(cursor: string | null, search: string | null) {
 export async function reconcile(trigger: string) {
   const run = await prisma.syncRun.create({ data: { kind: "reconcile", status: "running", detail: trigger } });
   if (!shopifyConfigured()) {
-    const detail = "Demo mode: Shopify token is not set, so reconcile did not call the shop.";
+    const detail = "Shopify is not connected yet, so reconcile did not call the shop.";
     await prisma.syncRun.update({ where: { id: run.id }, data: { status: "skipped", detail, finishedAt: new Date() } });
     return { status: "skipped", detail };
   }
